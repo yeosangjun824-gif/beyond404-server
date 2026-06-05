@@ -345,19 +345,19 @@ PRD: LG SwapIt
    4.5 STEP 5. 최종 크레딧 확정 및 자원 순환 확인
 
 5. 도메인별 기능 요구사항
-   5.1 Swap Request
+   5.1 Swap Request = 사용자의 가전 교환 신청 전체 건
        5.1.1 교환 신청 생성
        5.1.2 신청 상태 조회
        5.1.3 신청 상태 변경
        5.1.4 신청 취소
 
-   5.2 Appliance
+   5.2 Appliance = 사용자가 처리하려는 가전제품
        5.2.1 가전 종류 저장
        5.2.2 브랜드/모델명 저장
        5.2.3 예상 연식 저장
        5.2.4 외관 상태 저장
 
-   5.3 Inspection
+   5.3 Inspection = 사진 기반 제품 분석 단계
        5.3.1 이미지 업로드 URL 발급
        5.3.2 이미지 업로드 완료 처리
        5.3.3 Mock VLM 분석
@@ -365,14 +365,14 @@ PRD: LG SwapIt
        5.3.5 분석 결과 저장
        5.3.6 재촬영 요청
 
-   5.4 Pre-Valuation
+   5.4 Pre-Valuation = 사진 기반 예상 보상가 범위 산정
        5.4.1 예상 보상가 범위 계산
        5.4.2 최저/최고 금액 표시
        5.4.3 산정 근거 표시
        5.4.4 변동 가능 사유 안내
        5.4.5 예상 범위 확인
 
-   5.5 Booking
+   5.5 Booking = 수거 날짜와 시간 예약
        5.5.1 예약 가능 날짜 조회
        5.5.2 예약 가능 시간 조회
        5.5.3 수거 주소 입력
@@ -380,13 +380,13 @@ PRD: LG SwapIt
        5.5.5 예약 변경
        5.5.6 예약 취소
 
-   5.6 Tracking
+   5.6 Tracking = 수거 진행 상태 추적
        5.6.1 현재 진행 상태 조회
        5.6.2 상태 타임라인 표시
        5.6.3 도착 예정 시간 표시
        5.6.4 트래킹 이벤트 기록
 
-   5.7 Final Valuation
+   5.7 Final Valuation = 수거 후 최종 보상가 확정
        5.7.1 수거 후 검수 결과 등록
        5.7.2 원자재 가치 산정
        5.7.3 재사용 가능 부품 가치 산정
@@ -394,18 +394,18 @@ PRD: LG SwapIt
        5.7.5 최종 보상가 확정
        5.7.6 예비 견적과 차이 표시
 
-   5.8 Credit
+   5.8 Credit = 최종 보상가를 크레딧으로 전환
        5.8.1 최종 금액 크레딧 전환
        5.8.2 크레딧 발급
        5.8.3 크레딧 상태 조회
        5.8.4 크레딧 만료일 표시
 
-   5.9 Recycling
+   5.9 Recycling = 수거 가전의 자원 순환 결과
        5.9.1 자원 순환 결과 생성
        5.9.2 재활용/재판매/부품화 결과 표시
        5.9.3 환경 기여 지표 표시
 
-   5.10 Notification
+   5.10 Notification = 예약/수거/크레딧 관련 알림
        5.10.1 예약 확정 알림
        5.10.2 크루 출발 알림
        5.10.3 수거 완료 알림
@@ -422,49 +422,49 @@ PRD: LG SwapIt
    6.8 자원 순환 리포트 화면
 
 7. 상태 정의
-   7.1 Swap Request Status
-       7.1.1 CREATED
-       7.1.2 PHOTO_UPLOADED
-       7.1.3 INSPECTION_COMPLETED
-       7.1.4 PRE_VALUATION_READY
-       7.1.5 PRE_VALUATION_ACCEPTED
-       7.1.6 BOOKING_CONFIRMED
-       7.1.7 CREW_ASSIGNED
-       7.1.8 PICKUP_IN_PROGRESS
-       7.1.9 PICKUP_COMPLETED
-       7.1.10 FINAL_VALUATION_READY
-       7.1.11 CREDIT_ISSUED
-       7.1.12 COMPLETED
-       7.1.13 CANCELLED
+   7.1 Swap Request Status = 교환 신청이 현재 어느 단계인지 나타내는 상태값
+       7.1.1 CREATED = 신청이 처음 생성됨
+       7.1.2 PHOTO_UPLOADED = 가전 사진 업로드 완료
+       7.1.3 INSPECTION_COMPLETED = 사진 분석 완료
+       7.1.4 PRE_VALUATION_READY = 예상 보상가 범위 준비 완료
+       7.1.5 PRE_VALUATION_ACCEPTED = 사용자가 예상 범위 확인 후 진행
+       7.1.6 BOOKING_CONFIRMED = 수거 예약 확정
+       7.1.7 CREW_ASSIGNED = 수거 크루 배정 완료
+       7.1.8 PICKUP_IN_PROGRESS = 수거 진행 중
+       7.1.9 PICKUP_COMPLETED = 가전 수거 완료
+       7.1.10 FINAL_VALUATION_READY = 최종 보상가 확정 완료
+       7.1.11 CREDIT_ISSUED = 크레딧 발급 완료
+       7.1.12 COMPLETED = 전체 교환 과정 완료
+       7.1.13 CANCELLED = 신청 취소
 
-   7.2 Credit Status
-       7.2.1 PENDING
-       7.2.2 CONFIRMED
-       7.2.3 ISSUED
-       7.2.4 USED
-       7.2.5 EXPIRED
+   7.2 Credit Status = 크레딧이 현재 어떤 상태인지 나타내는 상태값
+       7.2.1 PENDING = 확정 전 대기 중
+       7.2.2 CONFIRMED = 크레딧 금액 확정
+       7.2.3 ISSUED = 크레딧 발급 완료
+       7.2.4 USED = 크레딧 사용 완료
+       7.2.5 EXPIRED = 크레딧 만료
 
 8. 데이터 요구사항
-   8.1 User
-   8.2 Swap Request
-   8.3 Appliance
-   8.4 Inspection Result
-   8.5 Pre Valuation
-   8.6 Booking
-   8.7 Tracking Event
-   8.8 Final Valuation
-   8.9 Credit
-   8.10 Recycling Report
+   8.1 User = 사용자 정보
+   8.2 Swap Request = 교환 신청 정보
+   8.3 Appliance = 가전제품 정보
+   8.4 Inspection Result = 사진 분석 결과
+   8.5 Pre Valuation = 예상 보상가 범위
+   8.6 Booking = 예약 정보
+   8.7 Tracking Event = 진행 상태 기록
+   8.8 Final Valuation = 최종 보상가
+   8.9 Credit = 크레딧 정보
+   8.10 Recycling Report = 자원 순환 결과 리포트
 
 9. API 요구사항
-   9.1 Swap Request API
-   9.2 Inspection API
-   9.3 Pre-Valuation API
-   9.4 Booking API
-   9.5 Tracking API
-   9.6 Final Valuation API
-   9.7 Credit API
-   9.8 Recycling API
+   9.1 Swap Request API = 교환 신청 생성/조회/상태 변경 API
+   9.2 Inspection API = 사진 업로드와 분석 결과 API
+   9.3 Pre-Valuation API = 예상 보상가 범위 API
+   9.4 Booking API = 수거 예약 API
+   9.5 Tracking API = 진행 상태 조회 API
+   9.6 Final Valuation API = 최종 보상가 확정 API
+   9.7 Credit API = 크레딧 발급/조회 API
+   9.8 Recycling API = 자원 순환 리포트 API
 
 10. 비기능 요구사항
    10.1 성능
@@ -521,114 +521,4 @@ PRD: LG SwapIt
 
 9. API 요구사항
 - 프론트와 백엔드가 어떤 주소로 어떤 데이터를 주고받을지 정리하는 부분
-```
-
-## 12. PRD 영어 용어 빠른 설명
-
-PRD 목차에는 개발에서 자주 쓰는 영어 용어가 들어갑니다.
-아래 설명은 팀원들이 문서를 읽을 때 뜻을 바로 이해하기 위한 간단한 해설입니다.
-
-### 도메인 이름
-
-```txt
-Swap Request
-- 사용자가 가전 교환을 신청한 전체 건
-- 사진 업로드, 예상 보상가, 예약, 수거, 크레딧이 모두 이 신청에 연결됨
-
-Appliance
-- 사용자가 처리하려는 가전제품
-- 예: 냉장고, 세탁기, 에어컨, TV
-
-Inspection
-- 사진을 보고 제품 정보를 분석하는 단계
-- VLM/OCR 분석 결과를 저장함
-
-Pre-Valuation
-- 사진만 보고 계산한 예상 보상가 범위
-- 아직 확정 금액이 아님
-
-Booking
-- 수거 날짜와 시간을 예약하는 단계
-
-Tracking
-- 수거 진행 상황을 보여주는 단계
-
-Final Valuation
-- 수거 후 실제 검수/해체를 거쳐 확정한 최종 보상가
-
-Credit
-- 최종 보상가를 LG 크레딧으로 전환한 것
-
-Recycling
-- 수거한 가전이 재활용, 재판매, 부품화되는 결과
-
-Notification
-- 예약, 수거, 크레딧 확정 같은 상황을 알려주는 알림
-```
-
-### Swap Request Status
-
-Swap Request Status는 교환 신청이 지금 어느 단계에 있는지 나타내는 상태값입니다.
-백엔드는 이 상태값을 보고 다음에 어떤 화면을 보여줄지 판단합니다.
-
-```txt
-CREATED
-- 교환 신청이 처음 만들어진 상태
-
-PHOTO_UPLOADED
-- 사용자가 가전 사진을 업로드한 상태
-
-INSPECTION_COMPLETED
-- 사진 분석이 끝난 상태
-
-PRE_VALUATION_READY
-- 예상 보상가 범위가 준비된 상태
-
-PRE_VALUATION_ACCEPTED
-- 사용자가 예상 보상가 범위를 확인하고 다음 단계로 진행한 상태
-
-BOOKING_CONFIRMED
-- 수거 예약이 확정된 상태
-
-CREW_ASSIGNED
-- 수거 크루가 배정된 상태
-
-PICKUP_IN_PROGRESS
-- 수거가 진행 중인 상태
-
-PICKUP_COMPLETED
-- 가전 수거가 완료된 상태
-
-FINAL_VALUATION_READY
-- 수거 후 최종 보상가가 확정된 상태
-
-CREDIT_ISSUED
-- 최종 금액이 크레딧으로 발급된 상태
-
-COMPLETED
-- 전체 교환 과정이 끝난 상태
-
-CANCELLED
-- 사용자가 신청을 취소한 상태
-```
-
-### Credit Status
-
-Credit Status는 크레딧이 지금 어떤 상태인지 나타냅니다.
-
-```txt
-PENDING
-- 아직 확정 전, 대기 중인 상태
-
-CONFIRMED
-- 최종 크레딧 금액이 확정된 상태
-
-ISSUED
-- 크레딧이 실제로 발급된 상태
-
-USED
-- 사용자가 크레딧을 사용한 상태
-
-EXPIRED
-- 크레딧 사용 기한이 지난 상태
 ```
