@@ -1,0 +1,27 @@
+spring:
+  datasource:
+    url: ${SWAPIT_DB_URL:jdbc:postgresql://localhost:5432/swapit}
+    driver-class-name: org.postgresql.Driver
+    username: ${SWAPIT_DB_USERNAME:swapit_user}
+    password: ${SWAPIT_DB_PASSWORD:swapit1234}
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+  sql:
+    init:
+      mode: never
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+
+management:
+  health:
+    db:
+      enabled: true
+
