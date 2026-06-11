@@ -12,12 +12,17 @@ public record SwapRequestResponse(
         UserConsent userConsent,
         CaptureEvidence captureEvidence,
         PreValuation preValuation,
+        RewardEstimate rewardEstimate,
+        SelectedProduct selectedProduct,
         Booking booking,
         PickupRequest pickupRequest,
+        CrewProfile crewProfile,
         DispatchInfo dispatchInfo,
         Tracking tracking,
         FinalValuation finalValuation,
         Credit credit,
+        RewardOverview rewardOverview,
+        DeliveryTracking deliveryTracking,
         PickupResultReport pickupResultReport,
         RecyclingReport recyclingReport,
         Settlement settlement,
@@ -32,7 +37,9 @@ public record SwapRequestResponse(
             String conditionGrade,
             String aiAnalysisStatus,
             double aiConfidence,
-            String uploadedFileName
+            String uploadedFileName,
+            String sizeGrade,
+            String sizeMetric
     ) {
     }
 
@@ -61,6 +68,26 @@ public record SwapRequestResponse(
     ) {
     }
 
+    public record RewardEstimate(
+            int scrapValue,
+            double creditRate,
+            double creditCapRate,
+            int estimatedFinalCredit,
+            int exchangeCount,
+            String userTier,
+            List<String> basis
+    ) {
+    }
+
+    public record SelectedProduct(
+            String productId,
+            String productName,
+            String productGrade,
+            int productPrice,
+            boolean sameDayEligible
+    ) {
+    }
+
     public record Booking(
             LocalDate bookingDate,
             String bookingTime,
@@ -79,7 +106,16 @@ public record SwapRequestResponse(
             String crewName,
             String address,
             String scheduledAt,
+            LocalDateTime requestedAt,
             List<NearbyCrew> nearbyCrews
+    ) {
+    }
+
+    public record CrewProfile(
+            String name,
+            String photoUrl,
+            double rating,
+            List<String> reviewSummary
     ) {
     }
 
@@ -159,6 +195,31 @@ public record SwapRequestResponse(
             int amount,
             String currency,
             String status
+    ) {
+    }
+
+    public record RewardOverview(
+            int currentCredit,
+            String userTier,
+            int exchangeCount,
+            String nextTier,
+            List<String> benefits
+    ) {
+    }
+
+    public record DeliveryTracking(
+            String status,
+            String etaMessage,
+            LocalDateTime updatedAt,
+            List<DeliveryStage> stages
+    ) {
+    }
+
+    public record DeliveryStage(
+            String stageKey,
+            String label,
+            boolean completed,
+            LocalDateTime completedAt
     ) {
     }
 

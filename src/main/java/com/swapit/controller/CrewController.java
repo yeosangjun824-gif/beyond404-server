@@ -37,6 +37,11 @@ public class CrewController {
         return swapRequestService.getAvailableCalls();
     }
 
+    @GetMapping("/calls/{pickupRequestId}")
+    public SwapRequestResponse getCallDetail(@PathVariable long pickupRequestId) {
+        return swapRequestService.getCrewCallDetail(pickupRequestId);
+    }
+
     @PostMapping("/calls/{pickupRequestId}/accept")
     public SwapRequestResponse acceptCall(@PathVariable long pickupRequestId) {
         return swapRequestService.acceptCall(pickupRequestId);

@@ -9,14 +9,15 @@ import com.swapit.dto.FinalValuationRequest;
 import com.swapit.dto.InstantCallRequest;
 import com.swapit.dto.PhotoUploadRequest;
 import com.swapit.dto.ReReviewRequest;
+import com.swapit.dto.SelectReplacementProductRequest;
 import com.swapit.dto.SwapRequestResponse;
 import com.swapit.dto.UpdateApplianceRequest;
 import org.springframework.stereotype.Service;
 
 import java.util.Comparator;
 import java.util.List;
-import java.util.NoSuchElementException;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -24,14 +25,20 @@ import java.util.concurrent.atomic.AtomicLong;
 public class SwapRequestService {
     private static final long DEMO_CUSTOMER_ID = 1L;
     private static final long DEMO_CREW_ID = 101L;
-    private static final String DEMO_CREW_NAME = "LG Pickup Partner";
+    private static final String DEMO_CREW_NAME = "민준 크루";
+    private static final String DEMO_CREW_PHOTO = "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=400&q=80";
+    private static final double DEMO_CREW_RATING = 4.9;
+    private static final List<String> DEMO_CREW_REVIEW_SUMMARY = List.of(
+            "친절하게 수거 진행",
+            "시간 약속을 잘 지켜요"
+    );
 
     private final AtomicLong sequence = new AtomicLong(1);
     private final Map<Long, SwapRequestState> store = new ConcurrentHashMap<>();
     private final Map<Long, CrewGpsState> crewGpsStore = new ConcurrentHashMap<>();
     private final List<SwapRequestResponse.LocationPoint> processingCenters = List.of(
-            new SwapRequestResponse.LocationPoint("Seoul West Processing Center", 37.5481, 126.8914),
-            new SwapRequestResponse.LocationPoint("Seoul East Processing Center", 37.5457, 127.1427)
+            new SwapRequestResponse.LocationPoint("서울 서부 e-waste 허브", 37.5481, 126.8914),
+            new SwapRequestResponse.LocationPoint("서울 동부 e-waste 허브", 37.5457, 127.1427)
     );
 
     public SwapRequestService() {
@@ -73,6 +80,18 @@ public class SwapRequestService {
     public SwapRequestResponse acceptPreValuation(long id) {
         SwapRequestState state = findState(id);
         state.acceptPreValuation();
+        return state.toResponse();
+    }
+
+    public SwapRequestResponse selectReplacementProduct(long id, SelectReplacementProductRequest request) {
+        SwapRequestState state = findState(id);
+        state.selectReplacementProduct(
+                request.productId(),
+                request.productName(),
+                request.productGrade(),
+                request.productPrice(),
+                Boolean.TRUE.equals(request.sameDayEligible())
+        );
         return state.toResponse();
     }
 
@@ -121,6 +140,12 @@ public class SwapRequestService {
         return state.toResponse();
     }
 
+    public SwapRequestResponse advanceDeliveryTracking(long id) {
+        SwapRequestState state = findState(id);
+        state.advanceDeliveryTracking();
+        return state.toResponse();
+    }
+
     public SwapRequestResponse get(long id) {
         SwapRequestState state = findState(id);
         enrichGpsContext(state);
@@ -148,17 +173,23 @@ public class SwapRequestService {
                     String status = state.getPickupStatus();
                     return "REQUESTED".equals(status) || "CONFIRMED".equals(status);
                 })
-                .sorted(Comparator.comparingLong(SwapRequestState::getId))
+                .sorted(Comparator.comparingLong(SwapRequestState::getId).reversed())
                 .peek(this::enrichGpsContext)
                 .map(SwapRequestState::toResponse)
                 .toList();
+    }
+
+    public SwapRequestResponse getCrewCallDetail(long pickupRequestId) {
+        SwapRequestState state = findByPickupRequestId(pickupRequestId);
+        enrichGpsContext(state);
+        return state.toResponse();
     }
 
     public SwapRequestResponse acceptCall(long pickupRequestId) {
         SwapRequestState state = findByPickupRequestId(pickupRequestId);
         CrewGpsState assignedCrew = crewGpsStore.getOrDefault(DEMO_CREW_ID, new CrewGpsState(DEMO_CREW_ID, DEMO_CREW_NAME, 37.5665, 126.9780, "AVAILABLE"));
         assignedCrew.status = "ASSIGNED";
-        state.acceptByCrew(DEMO_CREW_ID, assignedCrew.crewName);
+        state.acceptByCrew(DEMO_CREW_ID, assignedCrew.crewName, DEMO_CREW_PHOTO, DEMO_CREW_RATING, DEMO_CREW_REVIEW_SUMMARY);
         state.updateCrewLocation(assignedCrew.lat, assignedCrew.lng, assignedCrew.heading, assignedCrew.speed);
         enrichGpsContext(state);
         return state.toResponse();
@@ -226,10 +257,10 @@ public class SwapRequestService {
         state.completeFinalValuation(
                 request.amount(),
                 List.of(
-                        valueOrDefault(request.exteriorReason(), "Exterior condition reviewed."),
-                        valueOrDefault(request.partsReason(), "Parts reuse potential reviewed."),
-                        valueOrDefault(request.materialReason(), "Material recovery value reviewed."),
-                        valueOrDefault(request.processingReason(), "Pickup and processing cost reviewed.")
+                        valueOrDefault(request.exteriorReason(), "외관 상태를 확인했습니다."),
+                        valueOrDefault(request.partsReason(), "재사용 부품 가능성을 확인했습니다."),
+                        valueOrDefault(request.materialReason(), "소재 회수 가치를 반영했습니다."),
+                        valueOrDefault(request.processingReason(), "수거 및 처리 비용을 반영했습니다.")
                 )
         );
         return state.toResponse();
@@ -305,18 +336,17 @@ public class SwapRequestService {
 
         double baseDistance = topCrew == null ? 1800.0 : topCrew.distanceMeters();
         int matchScore = (int) Math.max(52, Math.min(97, Math.round(96 - (baseDistance / 120.0))));
-        String dispatchAlertMessage = state.getPickupStatus() == null
-                ? "Dispatch starts after the user chooses booking or instant call."
-                : switch (state.getPickupStatus()) {
-            case "REQUESTED", "CONFIRMED" -> "A priority dispatch alert was sent to the best-matched crew.";
-            case "ASSIGNED" -> "The assigned crew is sharing live route updates with the user.";
-            case "IN_PROGRESS" -> "The crew is moving toward the pickup point with live GPS updates.";
-            case "ARRIVED" -> "Pickup is in progress and the next route is the recycling hub.";
-            default -> "Crew dispatch is complete.";
+        String dispatchAlertMessage = switch (valueOrDefault(state.getPickupStatus(), "")) {
+            case "REQUESTED", "CONFIRMED" -> "매칭 점수가 높은 크루에게 우선 배차 알림을 발송했습니다.";
+            case "ASSIGNED" -> "배정된 크루가 사용자 앱에 실시간 위치를 공유하고 있습니다.";
+            case "IN_PROGRESS" -> "크루가 수거지로 이동 중이며 실시간 위치가 갱신되고 있습니다.";
+            case "ARRIVED" -> "수거 후 e-waste 공장 이동 준비가 진행 중입니다.";
+            case "COMPLETED" -> "e-waste 공장 전달이 완료되었습니다.";
+            default -> "예약 또는 바로콜 접수 후 배차 정보가 표시됩니다.";
         };
         String dispatchReason = topCrew == null
-                ? "No nearby crew data is available yet."
-                : "Closest crew distance " + Math.round(topCrew.distanceMeters()) + "m, live location freshness, and acceptance history were reflected.";
+                ? "근처 크루 정보가 아직 없습니다."
+                : "가까운 크루 거리 " + Math.round(topCrew.distanceMeters()) + "m, 현재 이동 동선, 최근 수락 이력을 반영했습니다.";
 
         state.setDispatchContext(
                 matchScore,
@@ -361,9 +391,9 @@ public class SwapRequestService {
 
     private void resetCrewGpsStore() {
         crewGpsStore.clear();
-        crewGpsStore.put(101L, new CrewGpsState(101L, "LG Pickup Partner", 37.5665, 126.9780, "AVAILABLE"));
-        crewGpsStore.put(102L, new CrewGpsState(102L, "Mapo Crew", 37.5563, 126.9220, "AVAILABLE"));
-        crewGpsStore.put(103L, new CrewGpsState(103L, "Gangseo Crew", 37.5585, 126.8321, "AVAILABLE"));
+        crewGpsStore.put(101L, new CrewGpsState(101L, DEMO_CREW_NAME, 37.5665, 126.9780, "AVAILABLE"));
+        crewGpsStore.put(102L, new CrewGpsState(102L, "서교 크루", 37.5563, 126.9220, "AVAILABLE"));
+        crewGpsStore.put(103L, new CrewGpsState(103L, "강서 크루", 37.5585, 126.8321, "AVAILABLE"));
     }
 
     private static final class CrewGpsState {

@@ -5,6 +5,7 @@ import com.swapit.dto.CreateSwapRequestRequest;
 import com.swapit.dto.InstantCallRequest;
 import com.swapit.dto.PhotoUploadRequest;
 import com.swapit.dto.ReReviewRequest;
+import com.swapit.dto.SelectReplacementProductRequest;
 import com.swapit.dto.SwapRequestResponse;
 import com.swapit.dto.UpdateApplianceRequest;
 import com.swapit.service.SwapRequestService;
@@ -50,6 +51,14 @@ public class SwapRequestController {
         return swapRequestService.acceptPreValuation(id);
     }
 
+    @PostMapping("/{id}/replacement-product")
+    public SwapRequestResponse selectReplacementProduct(
+            @PathVariable long id,
+            @Valid @RequestBody SelectReplacementProductRequest request
+    ) {
+        return swapRequestService.selectReplacementProduct(id, request);
+    }
+
     @PostMapping("/{id}/booking")
     public SwapRequestResponse confirmBooking(
             @PathVariable long id,
@@ -92,6 +101,11 @@ public class SwapRequestController {
     @PostMapping("/{id}/credits")
     public SwapRequestResponse issueCredit(@PathVariable long id) {
         return swapRequestService.issueCredit(id);
+    }
+
+    @PostMapping("/{id}/delivery/mock-progress")
+    public SwapRequestResponse advanceDeliveryTracking(@PathVariable long id) {
+        return swapRequestService.advanceDeliveryTracking(id);
     }
 
     @GetMapping("/{id}")
