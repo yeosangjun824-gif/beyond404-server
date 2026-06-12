@@ -22,7 +22,9 @@ public class CorsConfig implements WebMvcConfigurer {
                         "https://10.*.*.*:*",
                         "https://swapit.my",
                         "https://www.swapit.my",
-                        "https://crew.swapit.my"
+                        "https://crew.swapit.my",
+                        "https://*.swapit.my",
+                        "https://*.vercel.app"
                 )
                 .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
                 .allowedHeaders("*");
