@@ -201,14 +201,21 @@ public class SwapRequestState {
             String brand,
             String modelName,
             String estimatedAge,
-            String exteriorCondition
+            String exteriorCondition,
+            String dbSizeGrade,
+            String dbSizeMetric
     ) {
         this.applianceType = valueOrDefault(applianceType, this.applianceType);
         this.brand = valueOrDefault(brand, this.brand);
         this.modelName = valueOrDefault(modelName, this.modelName);
         this.estimatedAge = valueOrDefault(estimatedAge, this.estimatedAge);
         this.exteriorCondition = valueOrDefault(exteriorCondition, this.exteriorCondition);
-        this.applianceSizeMetric = defaultSizeMetric(this.applianceType);
+        if (dbSizeGrade != null && !dbSizeGrade.isBlank()) {
+            this.applianceSizeGrade = dbSizeGrade;
+        }
+        this.applianceSizeMetric = (dbSizeMetric != null && !dbSizeMetric.isBlank())
+                ? dbSizeMetric
+                : defaultSizeMetric(this.applianceType);
         this.scrapValue = scrapValueFor(this.applianceType, this.applianceSizeGrade);
         this.estimatedFinalCredit = selectedProductPrice == null
                 ? scrapValue

@@ -19,8 +19,10 @@ import com.swapit.dto.ReReviewRequest;
 import com.swapit.dto.SelectReplacementProductRequest;
 import com.swapit.dto.SwapRequestResponse;
 import com.swapit.dto.UpdateApplianceRequest;
+import com.swapit.domain.entity.ApplianceSpecEntity;
 import com.swapit.repository.ApplianceImageRepository;
 import com.swapit.repository.ApplianceRepository;
+import com.swapit.repository.ApplianceSpecsRepository;
 import com.swapit.repository.PickupRequestRepository;
 import com.swapit.repository.SwapRequestRepository;
 import com.swapit.repository.UserRepository;
@@ -59,6 +61,7 @@ public class SwapRequestService {
     private final ApplianceRepository applianceRepository;
     private final ApplianceImageRepository applianceImageRepository;
     private final ValuationRepository valuationRepository;
+    private final ApplianceSpecsRepository applianceSpecsRepository;
     private final GoogleRoutesService googleRoutesService;
     private final PickupRequestRepository pickupRequestRepository;
 
@@ -101,12 +104,23 @@ public class SwapRequestService {
     @Transactional
     public SwapRequestResponse updateAppliance(long id, UpdateApplianceRequest request) {
         SwapRequestState state = findState(id);
+        String dbSizeGrade = null;
+        String dbSizeMetric = null;
+        if (request.modelName() != null && !request.modelName().isBlank()) {
+            Optional<ApplianceSpecEntity> spec = applianceSpecsRepository.findByModelNameIgnoreCase(request.modelName());
+            if (spec.isPresent()) {
+                dbSizeGrade = spec.get().getSizeGrade();
+                dbSizeMetric = spec.get().buildSizeMetric();
+            }
+        }
         state.updateAppliance(
                 request.applianceType(),
                 request.brand(),
                 request.modelName(),
                 request.estimatedAge(),
-                request.exteriorCondition()
+                request.exteriorCondition(),
+                dbSizeGrade,
+                dbSizeMetric
         );
         persistApplianceConfirmation(id, request);
         return state.toResponse();
@@ -127,11 +141,17 @@ public class SwapRequestService {
         state.selectReplacementProduct(
                 request.productId(),
                 request.productName(),
-                request.productGrade(),
+                gradeFromPrice(request.productPrice()),
                 request.productPrice(),
                 Boolean.TRUE.equals(request.sameDayEligible())
         );
         return buildResponse(state);
+    }
+
+    private static String gradeFromPrice(int price) {
+        if (price >= 1_500_000) return "프리미엄";
+        if (price >= 500_000) return "일반";
+        return "보급형";
     }
 
     @Transactional
