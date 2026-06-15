@@ -268,6 +268,22 @@ public class SwapRequestService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<SwapRequestResponse> getPendingCalls() {
+        return pickupRequestRepository.findByStatusInOrderByCreatedAtDesc(List.of("REQUESTED", "CONFIRMED")).stream()
+                .map(PickupRequestEntity::getSwapRequest)
+                .map(this::restoreAndRespond)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<SwapRequestResponse> getActiveCalls() {
+        return pickupRequestRepository.findByStatusInOrderByCreatedAtDesc(List.of("ASSIGNED", "IN_PROGRESS", "ARRIVED")).stream()
+                .map(PickupRequestEntity::getSwapRequest)
+                .map(this::restoreAndRespond)
+                .toList();
+    }
+
     public SwapRequestResponse getCrewCallDetail(long pickupRequestId) {
         SwapRequestState state = findByPickupRequestId(pickupRequestId);
         return buildResponse(state);
