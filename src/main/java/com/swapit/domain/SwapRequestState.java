@@ -756,6 +756,11 @@ public class SwapRequestState {
                 case "대형" -> 27000;
                 default -> 14000;
             };
+            case "air_purifier" -> switch (sizeGrade) {
+                case "소형" -> 7000;
+                case "대형" -> 16000;
+                default -> 11000;
+            };
             default -> switch (sizeGrade) {
                 case "소형" -> 32000;
                 case "대형" -> 58000;
@@ -870,6 +875,7 @@ public class SwapRequestState {
             case "air_conditioner" -> "Whisen SQ07";
             case "tv" -> "OLED55C4";
             case "microwave" -> "MW23L";
+            case "air_purifier" -> "PuriCare AS181";
             default -> "Tromm F13";
         };
     }
@@ -880,6 +886,7 @@ public class SwapRequestState {
             case "air_conditioner" -> "2-4년";
             case "tv" -> "2-3년";
             case "microwave" -> "5년 이상";
+            case "air_purifier" -> "2-4년";
             default -> "3-5년";
         };
     }
@@ -890,6 +897,7 @@ public class SwapRequestState {
             case "air_conditioner" -> "실내기 외관 양호";
             case "tv" -> "패널 외관 양호";
             case "microwave" -> "외부 사용감 있음";
+            case "air_purifier" -> "필터 커버 양호, 외관 양호";
             default -> "외관 양호, 생활 사용감";
         };
     }
@@ -900,6 +908,7 @@ public class SwapRequestState {
             case "air_conditioner" -> "1.5톤";
             case "tv" -> "55인치";
             case "microwave" -> "23L";
+            case "air_purifier" -> "30평형";
             default -> "13kg";
         };
     }
@@ -910,6 +919,7 @@ public class SwapRequestState {
             case "air_conditioner" -> "에어컨";
             case "tv" -> "TV";
             case "microwave" -> "전자레인지";
+            case "air_purifier" -> "공기청정기";
             default -> "세탁기";
         };
     }

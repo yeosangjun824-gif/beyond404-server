@@ -1,6 +1,7 @@
 package com.swapit.controller;
 
 import com.swapit.dto.BookingRequest;
+import com.swapit.dto.BookingAvailabilityResponse;
 import com.swapit.dto.CreateSwapRequestRequest;
 import com.swapit.dto.InstantCallRequest;
 import com.swapit.dto.PhotoUploadRequest;
@@ -21,6 +22,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
+
 @RestController
 @RequestMapping("/api/swap-requests")
 @RequiredArgsConstructor
@@ -37,6 +40,11 @@ public class SwapRequestController {
         return swapRequestService.getLatestByUser(userId)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/booking-availability")
+    public BookingAvailabilityResponse getBookingAvailability(@RequestParam LocalDate date) {
+        return swapRequestService.getBookingAvailability(date);
     }
 
     @PostMapping("/{id}/photos")
