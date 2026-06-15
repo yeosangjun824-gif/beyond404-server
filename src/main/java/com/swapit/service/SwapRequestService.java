@@ -31,6 +31,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.time.LocalDate;
 import java.util.List;
@@ -38,6 +40,7 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
@@ -59,11 +62,13 @@ public class SwapRequestService {
     private final ApplianceRepository applianceRepository;
     private final ApplianceImageRepository applianceImageRepository;
     private final ValuationRepository valuationRepository;
+    private final GoogleRoutesService googleRoutesService;
     private final PickupRequestRepository pickupRequestRepository;
 
     private final AtomicLong sequence = new AtomicLong(1);
     private final Map<Long, SwapRequestState> store = new ConcurrentHashMap<>();
     private final Map<Long, CrewGpsState> crewGpsStore = new ConcurrentHashMap<>();
+    private final Map<Long, List<SwapRequestResponse.LocationHistoryPoint>> locationHistoryStore = new ConcurrentHashMap<>();
     private final List<SwapRequestResponse.LocationPoint> processingCenters = List.of(
             new SwapRequestResponse.LocationPoint("서울 서부 e-waste 허브", 37.5481, 126.8914),
             new SwapRequestResponse.LocationPoint("서울 동부 e-waste 허브", 37.5457, 127.1427)
@@ -83,7 +88,7 @@ public class SwapRequestService {
     public SwapRequestResponse create(CreateSwapRequestRequest request) {
         SwapRequestState state = createPersistentState(request);
         store.put(state.getId(), state);
-        return state.toResponse();
+        return buildResponse(state);
     }
 
     @Transactional
@@ -98,7 +103,7 @@ public class SwapRequestService {
                 request.agreedToCreditPolicy()
         );
         persistMockInspection(id, request);
-        return state.toResponse();
+        return buildResponse(state);
     }
 
     @Transactional
@@ -134,7 +139,7 @@ public class SwapRequestService {
                 request.productPrice(),
                 Boolean.TRUE.equals(request.sameDayEligible())
         );
-        return state.toResponse();
+        return buildResponse(state);
     }
 
     @Transactional(readOnly = true)
@@ -244,37 +249,36 @@ public class SwapRequestService {
     public SwapRequestResponse completeMockFinalValuation(long id) {
         SwapRequestState state = findState(id);
         state.completeMockFinalValuation();
-        return state.toResponse();
+        return buildResponse(state);
     }
 
     public SwapRequestResponse requestReReview(long id, ReReviewRequest request) {
         SwapRequestState state = findState(id);
         state.requestReReview(request.reason());
-        return state.toResponse();
+        return buildResponse(state);
     }
 
     public SwapRequestResponse completeMockReReview(long id) {
         SwapRequestState state = findState(id);
         state.completeReReview();
-        return state.toResponse();
+        return buildResponse(state);
     }
 
     public SwapRequestResponse issueCredit(long id) {
         SwapRequestState state = findState(id);
         state.issueCredit();
-        return state.toResponse();
+        return buildResponse(state);
     }
 
     public SwapRequestResponse advanceDeliveryTracking(long id) {
         SwapRequestState state = findState(id);
         state.advanceDeliveryTracking();
-        return state.toResponse();
+        return buildResponse(state);
     }
 
     public SwapRequestResponse get(long id) {
         SwapRequestState state = findState(id);
-        enrichGpsContext(state);
-        return state.toResponse();
+        return buildResponse(state);
     }
 
     @Transactional(readOnly = true)
@@ -285,15 +289,13 @@ public class SwapRequestService {
 
     public SwapRequestResponse getTracking(long id) {
         SwapRequestState state = findState(id);
-        enrichGpsContext(state);
-        return state.toResponse();
+        return buildResponse(state);
     }
 
     public List<SwapRequestResponse> getAll() {
         return store.values().stream()
                 .sorted(Comparator.comparingLong(SwapRequestState::getId))
-                .peek(this::enrichGpsContext)
-                .map(SwapRequestState::toResponse)
+                .map(this::buildResponse)
                 .toList();
     }
 
@@ -305,10 +307,29 @@ public class SwapRequestService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<SwapRequestResponse> getPendingCalls() {
+        return pickupRequestRepository.findByStatusInOrderByCreatedAtDesc(List.of("REQUESTED", "CONFIRMED")).stream()
+                .map(PickupRequestEntity::getSwapRequest)
+                .map(this::restoreAndRespond)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<SwapRequestResponse> getActiveCalls() {
+        return pickupRequestRepository.findByStatusInOrderByCreatedAtDesc(List.of("ASSIGNED", "IN_PROGRESS", "ARRIVED")).stream()
+                .map(PickupRequestEntity::getSwapRequest)
+                .map(this::restoreAndRespond)
+                .toList();
+    }
+
     public SwapRequestResponse getCrewCallDetail(long pickupRequestId) {
         SwapRequestState state = findByPickupRequestId(pickupRequestId);
-        enrichGpsContext(state);
-        return state.toResponse();
+        return buildResponse(state);
+    }
+
+    public List<SwapRequestResponse.LocationHistoryPoint> getLocationHistory(long pickupRequestId) {
+        return List.copyOf(locationHistoryStore.getOrDefault(pickupRequestId, List.of()));
     }
 
     public SwapRequestResponse acceptCall(long pickupRequestId) {
@@ -317,15 +338,14 @@ public class SwapRequestService {
         assignedCrew.status = "ASSIGNED";
         state.acceptByCrew(DEMO_CREW_ID, assignedCrew.crewName, DEMO_CREW_PHOTO, DEMO_CREW_RATING, DEMO_CREW_REVIEW_SUMMARY);
         state.updateCrewLocation(assignedCrew.lat, assignedCrew.lng, assignedCrew.heading, assignedCrew.speed);
-        enrichGpsContext(state);
-        return state.toResponse();
+        appendLocationHistory(pickupRequestId, assignedCrew.lat, assignedCrew.lng, assignedCrew.heading, assignedCrew.speed);
+        return buildResponse(state);
     }
 
     public SwapRequestResponse depart(long pickupRequestId) {
         SwapRequestState state = findByPickupRequestId(pickupRequestId);
         state.departCrew();
-        enrichGpsContext(state);
-        return state.toResponse();
+        return buildResponse(state);
     }
 
     public SwapRequestResponse updateLocation(long pickupRequestId, CrewLocationRequest request) {
@@ -348,15 +368,20 @@ public class SwapRequestService {
         crewState.speed = request.speed() == null ? 0.0 : request.speed();
         crewState.status = "ASSIGNED";
 
-        enrichGpsContext(state);
-        return state.toResponse();
+        appendLocationHistory(
+                pickupRequestId,
+                request.lat(),
+                request.lng(),
+                request.heading() == null ? 0.0 : request.heading(),
+                request.speed() == null ? 0.0 : request.speed()
+        );
+        return buildResponse(state);
     }
 
     public SwapRequestResponse arrive(long pickupRequestId) {
         SwapRequestState state = findByPickupRequestId(pickupRequestId);
         state.arriveCrew();
-        enrichGpsContext(state);
-        return state.toResponse();
+        return buildResponse(state);
     }
 
     public SwapRequestResponse completePickup(long pickupRequestId, CrewCompletePickupRequest request) {
@@ -374,8 +399,7 @@ public class SwapRequestService {
             crewState.status = "AVAILABLE";
         }
 
-        enrichGpsContext(state);
-        return state.toResponse();
+        return buildResponse(state);
     }
 
     public SwapRequestResponse adminCompleteFinalValuation(long id, FinalValuationRequest request) {
@@ -389,7 +413,7 @@ public class SwapRequestService {
                         valueOrDefault(request.processingReason(), "수거 및 처리 비용을 반영했습니다.")
                 )
         );
-        return state.toResponse();
+        return buildResponse(state);
     }
 
     public List<SwapRequestResponse.Notification> getNotifications(long userId) {
@@ -403,11 +427,182 @@ public class SwapRequestService {
         store.clear();
         sequence.set(1);
         resetCrewGpsStore();
+        locationHistoryStore.clear();
         return Map.of(
                 "message", "Demo pickup state has been reset.",
                 "totalSwapRequests", store.size(),
                 "availableCrewCalls", getAvailableCalls().size()
         );
+    }
+
+    private SwapRequestResponse buildResponse(SwapRequestState state) {
+        enrichGpsContext(state);
+        return augmentTracking(state, state.toResponse());
+    }
+
+    private SwapRequestResponse augmentTracking(SwapRequestState state, SwapRequestResponse response) {
+        if (response.tracking() == null) {
+            return response;
+        }
+
+        long pickupRequestId = response.pickupRequest() == null ? -1L : response.pickupRequest().pickupRequestId();
+        List<SwapRequestResponse.LocationHistoryPoint> history = pickupRequestId < 0
+                ? List.of()
+                : List.copyOf(locationHistoryStore.getOrDefault(pickupRequestId, List.of()));
+
+        SwapRequestResponse.RouteSummary route = resolveRoute(response, history);
+        SwapRequestResponse.Tracking tracking = new SwapRequestResponse.Tracking(
+                response.tracking().message(),
+                response.tracking().estimatedArrivalAt(),
+                response.tracking().driverLocation(),
+                response.tracking().processingCenter(),
+                response.tracking().phase(),
+                response.tracking().metrics(),
+                response.tracking().nearbyCrews(),
+                response.tracking().events(),
+                route,
+                history
+        );
+
+        return new SwapRequestResponse(
+                response.id(),
+                response.customerId(),
+                response.status(),
+                response.appliance(),
+                response.userConsent(),
+                response.captureEvidence(),
+                response.preValuation(),
+                response.rewardEstimate(),
+                response.selectedProduct(),
+                response.booking(),
+                response.pickupRequest(),
+                response.crewProfile(),
+                response.dispatchInfo(),
+                tracking,
+                response.finalValuation(),
+                response.credit(),
+                response.rewardOverview(),
+                response.deliveryTracking(),
+                response.pickupResultReport(),
+                response.recyclingReport(),
+                response.settlement(),
+                response.notifications()
+        );
+    }
+
+    private SwapRequestResponse.RouteSummary resolveRoute(
+            SwapRequestResponse response,
+            List<SwapRequestResponse.LocationHistoryPoint> history
+    ) {
+        if (response.tracking() == null) {
+            return null;
+        }
+
+        SwapRequestResponse.DriverLocation driverLocation = response.tracking().driverLocation();
+        if (driverLocation == null) {
+            return null;
+        }
+
+        SwapRequestResponse.RoutePoint origin = new SwapRequestResponse.RoutePoint(driverLocation.lat(), driverLocation.lng());
+        SwapRequestResponse.RoutePoint destination = resolveDestination(response);
+        if (destination == null) {
+            return null;
+        }
+
+        SwapRequestResponse.RouteSummary computedRoute = googleRoutesService.computeDrivingRoute(origin, destination);
+        List<SwapRequestResponse.RoutePoint> mergedPoints = mergeHistoryWithRoute(history, computedRoute, destination);
+
+        return new SwapRequestResponse.RouteSummary(
+                computedRoute.mode(),
+                computedRoute.distanceMeters(),
+                computedRoute.durationSeconds(),
+                computedRoute.distanceLabel(),
+                computedRoute.durationLabel(),
+                computedRoute.encodedPolyline(),
+                mergedPoints,
+                computedRoute.calculatedAt()
+        );
+    }
+
+    private SwapRequestResponse.RoutePoint resolveDestination(SwapRequestResponse response) {
+        String pickupStatus = response.pickupRequest() == null ? null : response.pickupRequest().status();
+        boolean headingToHub = "ARRIVED".equals(pickupStatus)
+                || "COMPLETED".equals(pickupStatus)
+                || "EN_ROUTE_TO_PROCESSING_CENTER".equals(response.tracking().phase())
+                || "DELIVERED_TO_EWASTE_HUB".equals(response.tracking().phase());
+
+        if (headingToHub && response.tracking().processingCenter() != null) {
+            return new SwapRequestResponse.RoutePoint(
+                    response.tracking().processingCenter().lat(),
+                    response.tracking().processingCenter().lng()
+            );
+        }
+
+        if (response.booking() != null && response.booking().pickupLat() != null && response.booking().pickupLng() != null) {
+            return new SwapRequestResponse.RoutePoint(response.booking().pickupLat(), response.booking().pickupLng());
+        }
+
+        if (response.tracking().processingCenter() != null) {
+            return new SwapRequestResponse.RoutePoint(
+                    response.tracking().processingCenter().lat(),
+                    response.tracking().processingCenter().lng()
+            );
+        }
+
+        return null;
+    }
+
+    private List<SwapRequestResponse.RoutePoint> mergeHistoryWithRoute(
+            List<SwapRequestResponse.LocationHistoryPoint> history,
+            SwapRequestResponse.RouteSummary route,
+            SwapRequestResponse.RoutePoint destination
+    ) {
+        List<SwapRequestResponse.RoutePoint> merged = new ArrayList<>();
+
+        for (SwapRequestResponse.LocationHistoryPoint point : history) {
+            merged.add(new SwapRequestResponse.RoutePoint(point.lat(), point.lng()));
+        }
+
+        if (route != null && route.points() != null) {
+            for (SwapRequestResponse.RoutePoint point : route.points()) {
+                if (merged.isEmpty() || !samePoint(merged.get(merged.size() - 1), point)) {
+                    merged.add(point);
+                }
+            }
+        }
+
+        if (destination != null && (merged.isEmpty() || !samePoint(merged.get(merged.size() - 1), destination))) {
+            merged.add(destination);
+        }
+
+        return merged;
+    }
+
+    private boolean samePoint(SwapRequestResponse.RoutePoint left, SwapRequestResponse.RoutePoint right) {
+        return Math.abs(left.lat() - right.lat()) < 0.00001
+                && Math.abs(left.lng() - right.lng()) < 0.00001;
+    }
+
+    private void appendLocationHistory(long pickupRequestId, double lat, double lng, double heading, double speed) {
+        List<SwapRequestResponse.LocationHistoryPoint> history = locationHistoryStore.computeIfAbsent(
+                pickupRequestId,
+                ignored -> new CopyOnWriteArrayList<>()
+        );
+
+        if (!history.isEmpty()) {
+            SwapRequestResponse.LocationHistoryPoint last = history.get(history.size() - 1);
+            if (Math.abs(last.lat() - lat) < 0.00001 && Math.abs(last.lng() - lng) < 0.00001) {
+                return;
+            }
+        }
+
+        history.add(new SwapRequestResponse.LocationHistoryPoint(
+                lat,
+                lng,
+                heading,
+                speed,
+                LocalDateTime.now()
+        ));
     }
 
     private void enrichGpsContext(SwapRequestState state) {

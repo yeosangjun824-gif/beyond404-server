@@ -26,4 +26,8 @@ management:
       exposure:
         include: health,info
 
+google:
+  maps:
+    server-api-key: ${GOOGLE_MAPS_SERVER_API_KEY:${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:}}
+
 

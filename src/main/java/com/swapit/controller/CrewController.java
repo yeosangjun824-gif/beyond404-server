@@ -37,9 +37,24 @@ public class CrewController {
         return swapRequestService.getAvailableCalls();
     }
 
+    @GetMapping("/calls/pending")
+    public List<SwapRequestResponse> getPendingCalls() {
+        return swapRequestService.getPendingCalls();
+    }
+
+    @GetMapping("/calls/active")
+    public List<SwapRequestResponse> getActiveCalls() {
+        return swapRequestService.getActiveCalls();
+    }
+
     @GetMapping("/calls/{pickupRequestId}")
     public SwapRequestResponse getCallDetail(@PathVariable long pickupRequestId) {
         return swapRequestService.getCrewCallDetail(pickupRequestId);
+    }
+
+    @GetMapping("/pickups/{pickupRequestId}/location-history")
+    public List<SwapRequestResponse.LocationHistoryPoint> getLocationHistory(@PathVariable long pickupRequestId) {
+        return swapRequestService.getLocationHistory(pickupRequestId);
     }
 
     @PostMapping("/calls/{pickupRequestId}/accept")

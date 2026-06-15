@@ -138,8 +138,10 @@ public record SwapRequestResponse(
             String phase,
             TrackingMetrics metrics,
             List<NearbyCrew> nearbyCrews,
-            List<TrackingEvent> events
-    ) {
+            List<TrackingEvent> events,
+            RouteSummary route,
+            List<LocationHistoryPoint> locationHistory
+        ) {
     }
 
     public record LocationPoint(
@@ -180,6 +182,33 @@ public record SwapRequestResponse(
             Double crewToPickupMeters,
             Double crewToProcessingCenterMeters,
             boolean locationLive
+    ) {
+    }
+
+    public record RouteSummary(
+            String mode,
+            Double distanceMeters,
+            Long durationSeconds,
+            String distanceLabel,
+            String durationLabel,
+            String encodedPolyline,
+            List<RoutePoint> points,
+            LocalDateTime calculatedAt
+    ) {
+    }
+
+    public record RoutePoint(
+            double lat,
+            double lng
+    ) {
+    }
+
+    public record LocationHistoryPoint(
+            double lat,
+            double lng,
+            double heading,
+            double speed,
+            LocalDateTime recordedAt
     ) {
     }
 
