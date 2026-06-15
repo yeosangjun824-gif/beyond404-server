@@ -52,6 +52,11 @@ public class CrewController {
         return swapRequestService.getCrewCallDetail(pickupRequestId);
     }
 
+    @GetMapping("/pickups/{pickupRequestId}/location-history")
+    public List<SwapRequestResponse.LocationHistoryPoint> getLocationHistory(@PathVariable long pickupRequestId) {
+        return swapRequestService.getLocationHistory(pickupRequestId);
+    }
+
     @PostMapping("/calls/{pickupRequestId}/accept")
     public SwapRequestResponse acceptCall(@PathVariable long pickupRequestId) {
         return swapRequestService.acceptCall(pickupRequestId);
