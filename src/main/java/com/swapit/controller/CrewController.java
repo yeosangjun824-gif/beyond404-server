@@ -47,7 +47,7 @@ public class CrewController {
         return swapRequestService.getActiveCalls();
     }
 
-    @GetMapping("/calls/{pickupRequestId}")
+    @GetMapping("/calls/{pickupRequestId:\\d+}")
     public SwapRequestResponse getCallDetail(@PathVariable long pickupRequestId) {
         return swapRequestService.getCrewCallDetail(pickupRequestId);
     }

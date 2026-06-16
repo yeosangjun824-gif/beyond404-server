@@ -8,7 +8,7 @@ public record FirebaseLoginRequest(
         @NotBlank String firebaseUid,
         @NotBlank @Email String email,
         boolean emailVerified,
-        @NotBlank String userName,
-        @NotBlank @Size(max = 30) String phoneNumber
+        String userName,
+        @Size(max = 30) String phoneNumber
 ) {
 }

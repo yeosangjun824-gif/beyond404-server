@@ -44,7 +44,7 @@ public class UserService {
     public LoginIdCheckResponse checkLoginId(String loginId) {
         String normalizedLoginId = normalizeLoginId(loginId);
         if (normalizedLoginId.length() < 4) {
-            return new LoginIdCheckResponse(false, "아이디는 4자 이상 입력해 주세요.");
+            return new LoginIdCheckResponse(false, "아이디는 4자 이상 입력해주세요.");
         }
 
         boolean available = !userRepository.existsByLoginIdIgnoreCase(normalizedLoginId);
@@ -93,7 +93,7 @@ public class UserService {
     @Transactional
     public DemoLoginResponse firebaseLogin(FirebaseLoginRequest request) {
         if (!request.emailVerified()) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Email verification is required.");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "이메일 인증이 완료된 계정만 로그인할 수 있습니다.");
         }
 
         String email = normalizeEmail(request.email());
@@ -105,12 +105,19 @@ public class UserService {
         UserEntity user = userRepository.findByFirebaseUid(request.firebaseUid())
                 .or(() -> userRepository.findByEmailIgnoreCase(email))
                 .map(existingUser -> {
-                    assertPhoneNumberAvailableFor(existingUser, phoneNumber);
-                    existingUser.updateFirebaseProfile(email, true, userName, phoneNumber);
+                    String nextName = userName.isBlank() ? existingUser.getName() : userName;
+                    String nextPhoneNumber = phoneNumber == null ? existingUser.getPhoneNumber() : phoneNumber;
+                    assertPhoneNumberAvailableFor(existingUser, nextPhoneNumber);
+                    existingUser.updateFirebaseProfile(email, true, nextName, nextPhoneNumber);
                     return existingUser;
                 })
                 .orElseGet(() -> {
+                    /*
+                    if (phoneNumber.isBlank()) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "회원가입을 먼저 완료해주세요. 전화번호 확인 후 이메일 인증을 진행해야 합니다.");
+                    }
                     assertPhoneNumberAvailableForNewUser(phoneNumber);
+                    */
                     return UserEntity.createWithFirebase(
                             request.firebaseUid(),
                             email,
@@ -132,7 +139,12 @@ public class UserService {
 
     public static String formatPhoneNumber(String phoneNumber) {
         if (phoneNumber == null) {
-            return "";
+            return null;
+        }
+
+        String trimmed = phoneNumber.trim();
+        if (trimmed.isEmpty()) {
+            return null;
         }
 
         String digits = phoneNumber.replaceAll("[^0-9]", "");
@@ -143,7 +155,7 @@ public class UserService {
             return digits.substring(0, 3) + "-" + digits.substring(3, 6) + "-" + digits.substring(6);
         }
 
-        return phoneNumber.trim();
+        return trimmed;
     }
 
     private static String normalizeLoginId(String loginId) {
@@ -155,13 +167,13 @@ public class UserService {
     }
 
     private void assertPhoneNumberAvailableForNewUser(String phoneNumber) {
-        if (!phoneNumber.isBlank() && userRepository.existsByPhoneNumber(phoneNumber)) {
+        if (phoneNumber != null && !phoneNumber.isBlank() && userRepository.existsByPhoneNumber(phoneNumber)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, DUPLICATE_PHONE_MESSAGE);
         }
     }
 
     private void assertPhoneNumberAvailableFor(UserEntity currentUser, String phoneNumber) {
-        if (phoneNumber.isBlank()) {
+        if (phoneNumber == null || phoneNumber.isBlank()) {
             return;
         }
 

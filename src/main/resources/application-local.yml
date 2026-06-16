@@ -1,9 +1,10 @@
 spring:
   datasource:
-    url: ${SWAPIT_DB_URL:jdbc:postgresql://localhost:5432/swapit}
+    url: ${SWAPIT_DB_URL:jdbc:postgresql://swapit-postgres.cpc2mimscig9.ap-northeast-2.rds.amazonaws.com:5432/swapit?sslmode=require}
     driver-class-name: org.postgresql.Driver
     username: ${SWAPIT_DB_USERNAME:swapit_user}
-    password: ${SWAPIT_DB_PASSWORD:swapit1234}
+    password: ${SWAPIT_DB_PASSWORD:wYJRuqD4A7KmC:d}
+  
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
