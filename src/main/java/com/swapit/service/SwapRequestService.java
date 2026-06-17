@@ -325,6 +325,7 @@ public class SwapRequestService {
                 .map(PickupRequestEntity::getSwapRequest)
                 .map(this::restoreAndRespond)
                 .filter(response -> hasPickupStatus(response, "REQUESTED", "CONFIRMED"))
+                .sorted(crewCallComparator())
                 .toList();
     }
 
@@ -334,6 +335,7 @@ public class SwapRequestService {
                 .map(PickupRequestEntity::getSwapRequest)
                 .map(this::restoreAndRespond)
                 .filter(response -> hasPickupStatus(response, "REQUESTED", "CONFIRMED"))
+                .sorted(crewCallComparator())
                 .toList();
     }
 
@@ -343,6 +345,7 @@ public class SwapRequestService {
                 .map(PickupRequestEntity::getSwapRequest)
                 .map(this::restoreAndRespond)
                 .filter(response -> hasPickupStatus(response, "ASSIGNED", "IN_PROGRESS", "ARRIVED"))
+                .sorted(crewCallComparator())
                 .toList();
     }
 
@@ -352,6 +355,7 @@ public class SwapRequestService {
                 .map(PickupRequestEntity::getSwapRequest)
                 .map(this::restoreAndRespond)
                 .filter(response -> hasPickupStatus(response, "COMPLETED"))
+                .sorted(crewCallComparator())
                 .toList();
     }
 
@@ -942,6 +946,13 @@ public class SwapRequestService {
 
         return Arrays.stream(statuses)
                 .anyMatch(status -> status.equals(response.pickupRequest().status()));
+    }
+
+    private Comparator<SwapRequestResponse> crewCallComparator() {
+        return Comparator
+                .comparingLong((SwapRequestResponse response) ->
+                        response.pickupRequest() == null ? Long.MIN_VALUE : response.pickupRequest().pickupRequestId())
+                .reversed();
     }
 
     private double distanceMeters(double lat1, double lng1, double lat2, double lng2) {
