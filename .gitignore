@@ -40,3 +40,6 @@ out/
 dev-server.log
 *.log
 .env.local
+
+### Personal notes ###
+my-notes.md
