@@ -63,12 +63,12 @@ public class SwapRequestService {
 
     private static final long DEMO_CUSTOMER_ID = 1L;
     private static final long DEMO_CREW_ID = 101L;
-    private static final String DEMO_CREW_NAME = "誘쇱? ?щ（";
-    private static final String DEMO_CREW_PHOTO = "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=400&q=80";
+    private static final String DEMO_CREW_NAME = "\uBB34\uD568\uB9C8\uB4DC";
+    private static final String DEMO_CREW_PHOTO = "/crew-muhammad.png";
     private static final double DEMO_CREW_RATING = 4.9;
     private static final List<String> DEMO_CREW_REVIEW_SUMMARY = List.of(
-            "移쒖젅?섍쾶 ?섍굅 吏꾪뻾",
-            "?쒓컙 ?쎌냽????吏耳쒖슂"
+            "\uAE54\uB054\uD558\uACE0 \uC2E0\uC18D\uD558\uAC8C \uC218\uAC70\uB97C \uC9C4\uD589\uD574\uC694",
+            "\uC57D\uC18D \uC2DC\uAC04\uC744 \uC798 \uC9C0\uD0A4\uACE0 \uC548\uB0B4\uAC00 \uCE5C\uC808\uD574\uC694"
     );
 
     private final UserRepository userRepository;
@@ -87,8 +87,8 @@ public class SwapRequestService {
     private final Map<Long, List<SwapRequestResponse.LocationHistoryPoint>> locationHistoryStore = new ConcurrentHashMap<>();
     private final Map<Long, CachedRoute> routeCacheStore = new ConcurrentHashMap<>();
     private final List<SwapRequestResponse.LocationPoint> processingCenters = List.of(
-            new SwapRequestResponse.LocationPoint("?쒖슱 ?쒕? e-waste ?덈툕", 37.5481, 126.8914),
-            new SwapRequestResponse.LocationPoint("?쒖슱 ?숇? e-waste ?덈툕", 37.5457, 127.1427)
+            new SwapRequestResponse.LocationPoint("\uB9C8\uACE1 LG e-waste \uCC98\uB9AC\uD5C8\uBE0C \u00B7 \uC11C\uC6B8 \uAC15\uC11C\uAD6C \uB9C8\uACE1\uB3D9", 37.5609, 126.8335),
+            new SwapRequestResponse.LocationPoint("\uCC3D\uC6D0 LG e-waste \uCC98\uB9AC\uD5C8\uBE0C \u00B7 \uACBD\uB0A8 \uCC3D\uC6D0\uC2DC \uC131\uC0B0\uAD6C", 35.2273, 128.6817)
     );
     private final List<String> bookingTimeSlots = List.of(
             "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
@@ -218,9 +218,9 @@ public class SwapRequestService {
     }
 
     private static String gradeFromPrice(int price) {
-        if (price >= 1_500_000) return "프리미엄";
-        if (price >= 500_000) return "일반";
-        return "보급형";
+        if (price >= 1_500_000) return "\uD504\uB9AC\uBBF8\uC5C4";
+        if (price >= 500_000) return "\uC77C\uBC18";
+        return "\uBCF4\uAE09\uD615";
     }
     @Transactional(readOnly = true)
     public BookingAvailabilityResponse getBookingAvailability(LocalDate date) {
@@ -428,40 +428,36 @@ public class SwapRequestService {
 
     @Transactional(readOnly = true)
     public List<SwapRequestResponse> getAvailableCalls() {
-        return pickupRequestRepository.findAll().stream()
+        return pickupRequestRepository.findAllWithSwapRequestByStatuses(List.of("REQUESTED", "CONFIRMED")).stream()
                 .map(PickupRequestEntity::getSwapRequest)
                 .map(this::restoreAndRespond)
-                .filter(response -> hasPickupStatus(response, "REQUESTED", "CONFIRMED"))
                 .sorted(crewCallComparator())
                 .toList();
     }
 
     @Transactional(readOnly = true)
     public List<SwapRequestResponse> getPendingCalls() {
-        return pickupRequestRepository.findAll().stream()
+        return pickupRequestRepository.findAllWithSwapRequestByStatuses(List.of("REQUESTED", "CONFIRMED")).stream()
                 .map(PickupRequestEntity::getSwapRequest)
                 .map(this::restoreAndRespond)
-                .filter(response -> hasPickupStatus(response, "REQUESTED", "CONFIRMED"))
                 .sorted(crewCallComparator())
                 .toList();
     }
 
     @Transactional(readOnly = true)
     public List<SwapRequestResponse> getActiveCalls() {
-        return pickupRequestRepository.findAll().stream()
+        return pickupRequestRepository.findAllWithSwapRequestByStatuses(List.of("ASSIGNED", "IN_PROGRESS", "ARRIVED")).stream()
                 .map(PickupRequestEntity::getSwapRequest)
                 .map(this::restoreAndRespond)
-                .filter(response -> hasPickupStatus(response, "ASSIGNED", "IN_PROGRESS", "ARRIVED"))
                 .sorted(crewCallComparator())
                 .toList();
     }
 
     @Transactional(readOnly = true)
     public List<SwapRequestResponse> getCompletedCalls() {
-        return pickupRequestRepository.findAll().stream()
+        return pickupRequestRepository.findAllWithSwapRequestByStatuses(List.of("COMPLETED")).stream()
                 .map(PickupRequestEntity::getSwapRequest)
                 .map(this::restoreAndRespond)
-                .filter(response -> hasPickupStatus(response, "COMPLETED"))
                 .sorted(crewCallComparator())
                 .toList();
     }
@@ -582,10 +578,10 @@ public class SwapRequestService {
         state.completeFinalValuation(
                 request.amount(),
                 List.of(
-                        valueOrDefault(request.exteriorReason(), "?멸? ?곹깭瑜??뺤씤?덉뒿?덈떎."),
-                        valueOrDefault(request.partsReason(), "?ъ궗??遺??媛?μ꽦???뺤씤?덉뒿?덈떎."),
-                        valueOrDefault(request.materialReason(), "?뚯옱 ?뚯닔 媛移섎? 諛섏쁺?덉뒿?덈떎."),
-                        valueOrDefault(request.processingReason(), "?섍굅 諛?泥섎━ 鍮꾩슜??諛섏쁺?덉뒿?덈떎.")
+                        valueOrDefault(request.exteriorReason(), "?癲? ????븐뻤????癲ル슢캉?????????????딅젩."),
+                        valueOrDefault(request.partsReason(), "????????낇뀘?????醫딆쓧????臾먮튉???癲ル슢캉?????????????딅젩."),
+                        valueOrDefault(request.materialReason(), "????????????醫딆쓧???⑤㈇??? ?熬곣뫖利????????????딅젩."),
+                        valueOrDefault(request.processingReason(), "??????춦 ???꿔꺂??節뉖き?????????熬곣뫖利????????????딅젩.")
                 )
         );
         return buildResponse(state);
@@ -598,7 +594,14 @@ public class SwapRequestService {
                 .toList();
     }
 
+    @Transactional
     public synchronized Map<String, Object> resetDemoState() {
+        crewReviewRepository.deleteAllInBatch();
+        pickupRequestRepository.deleteAllInBatch();
+        valuationRepository.deleteAllInBatch();
+        applianceImageRepository.deleteAllInBatch();
+        applianceRepository.deleteAllInBatch();
+        swapRequestRepository.deleteAllInBatch();
         store.clear();
         sequence.set(1);
         resetCrewGpsStore();
@@ -607,7 +610,7 @@ public class SwapRequestService {
         return Map.of(
                 "message", "Demo pickup state has been reset.",
                 "totalSwapRequests", store.size(),
-                "availableCrewCalls", getAvailableCalls().size()
+                "availableCrewCalls", 0
         );
     }
 
@@ -916,16 +919,16 @@ public class SwapRequestService {
         double baseDistance = topCrew == null ? 1800.0 : topCrew.distanceMeters();
         int matchScore = (int) Math.max(52, Math.min(97, Math.round(96 - (baseDistance / 120.0))));
         String dispatchAlertMessage = switch (valueOrDefault(state.getPickupStatus(), "")) {
-            case "REQUESTED", "CONFIRMED" -> "留ㅼ묶 ?먯닔媛 ?믪? ?щ（?먭쾶 ?곗꽑 諛곗감 ?뚮┝??諛쒖넚?덉뒿?덈떎.";
-            case "ASSIGNED" -> "諛곗젙???щ（媛 ?ъ슜???깆뿉 ?ㅼ떆媛??꾩튂瑜?怨듭쑀?섍퀬 ?덉뒿?덈떎.";
-            case "IN_PROGRESS" -> "?щ（媛 ?섍굅吏濡??대룞 以묒씠硫??ㅼ떆媛??꾩튂媛 媛깆떊?섍퀬 ?덉뒿?덈떎.";
-            case "ARRIVED" -> "?섍굅 ??e-waste 怨듭옣 ?대룞 以鍮꾧? 吏꾪뻾 以묒엯?덈떎.";
-            case "COMPLETED" -> "e-waste 怨듭옣 ?꾨떖???꾨즺?섏뿀?듬땲??";
-            default -> "?덉빟 ?먮뒗 諛붾줈肄??묒닔 ??諛곗감 ?뺣낫媛 ?쒖떆?⑸땲??";
+            case "REQUESTED", "CONFIRMED" -> "?꿔꺂????????????琉우º???쎛 ?雅? ??輿????????????얠? ?熬곣뫖利?影?놁씀????????熬곣뫖利든뜏???????????딅젩.";
+            case "ASSIGNED" -> "?熬곣뫖利??????輿삳뿫遊??썬럸? ??????嚥싲갭큔???????⑤베鍮??????썹땟???????댁벖?????野껊뿈????????????딅젩.";
+            case "IN_PROGRESS" -> "??輿삳뿫遊??썬럸? ??????춦?꿔꺂??????????嚥싳쉶瑗??꾧틡???レ탳??????⑤베鍮??????썹땟?熬곻퐢夷???쎛 ??醫딆┣?????野껊뿈????????????딅젩.";
+            case "ARRIVED" -> "??????춦 ??e-waste ????댁벖???????嚥싳쉶瑗ц짆堉샕???? ?꿔꺂????紐꾩뗄?嚥싳쉶瑗??꾧틡??????딅젩.";
+            case "COMPLETED" -> "e-waste ????댁벖??????썹땟????????썹땟???嶺???????";
+            default -> "????⑥쥓萸???????熬곣뫖利??濚욌꼬?녹럹???????????熬곣뫖利?影?놁씀??癲ル슢???ъ쒜筌믡굥夷???쎛 ??嶺?筌??嶺뚮ㅎ????";
         };
         String dispatchReason = topCrew == null
-                ? "洹쇱쿂 ?щ（ ?뺣낫媛 ?꾩쭅 ?놁뒿?덈떎."
-                : "媛源뚯슫 ?щ（ 嫄곕━ " + Math.round(topCrew.distanceMeters()) + "m, ?꾩옱 ?대룞 ?숈꽑, 理쒓렐 ?섎씫 ?대젰??諛섏쁺?덉뒿?덈떎.";
+                ? "??????レ맗???輿??癲ル슢???ъ쒜筌믡굥夷???쎛 ????썹땟?㏓퉲?????ㅿ폍??????딅젩."
+                : "??醫딆쓧??μ떜媛?걫?????輿??꿸쑨?????" + Math.round(topCrew.distanceMeters()) + "m, ????썹땟????????????뉗?, ?꿔꺂????쭍???????????????熬곣뫖利????????????딅젩.";
 
         state.setDispatchContext(
                 matchScore,
@@ -959,7 +962,7 @@ public class SwapRequestService {
                 swapRequest,
                 1500,
                 2400,
-                "?ъ쭊 湲곕컲 Mock VLM 遺꾩꽍 寃곌낵濡??곗젙???덉긽 蹂댁긽媛?낅땲??"
+                "??傭????뚯???維◈?Mock VLM ???곗뒩泳???嚥▲굧?????諛명뱺??????????????壤???⑤슢???貫糾??怨몄???????뉖뤁??"
         ));
         swapRequest.changeStatus(SwapRequestStatus.PRE_VALUATION_READY.name());
         swapRequestRepository.save(swapRequest);
@@ -973,8 +976,8 @@ public class SwapRequestService {
                 valueOrDefault(request.applianceType(), swapRequest.getApplianceType()),
                 valueOrDefault(request.brand(), "LG"),
                 valueOrDefault(request.modelName(), "Unknown"),
-                valueOrDefault(request.estimatedAge(), "?뺤씤 ?꾩슂"),
-                valueOrDefault(request.exteriorCondition(), "?뺤씤 ?꾩슂")
+                valueOrDefault(request.estimatedAge(), "\uC5F0\uC2DD \uD655\uC778 \uC911"),
+                valueOrDefault(request.exteriorCondition(), "\uC678\uAD00 \uD655\uC778 \uC911")
         );
         applianceRepository.save(appliance);
         swapRequest.changeStatus(SwapRequestStatus.PRE_VALUATION_READY.name());
