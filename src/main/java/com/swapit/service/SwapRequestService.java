@@ -14,6 +14,7 @@ import com.swapit.dto.BookingAvailabilityResponse;
 import com.swapit.dto.CrewReviewRequest;
 import com.swapit.dto.CrewCompletePickupRequest;
 import com.swapit.dto.CrewLocationRequest;
+import com.swapit.dto.CreateInstantCallRequest;
 import com.swapit.dto.CreateSwapRequestRequest;
 import com.swapit.dto.FinalValuationRequest;
 import com.swapit.dto.InstantCallRequest;
@@ -37,6 +38,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -53,6 +57,10 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class SwapRequestService {
+    private static final double ROUTE_CACHE_DESTINATION_MOVE_LIMIT_METERS = 5.0;
+    private static final double ROUTE_CACHE_ORIGIN_MOVE_LIMIT_METERS = 20.0;
+    private static final long ROUTE_CACHE_TTL_SECONDS = 15L;
+
     private static final long DEMO_CUSTOMER_ID = 1L;
     private static final long DEMO_CREW_ID = 101L;
     private static final String DEMO_CREW_NAME = "誘쇱? ?щ（";
@@ -98,6 +106,53 @@ public class SwapRequestService {
         SwapRequestState state = createPersistentState(request);
         store.put(state.getId(), state);
         return buildResponse(state);
+    }
+
+    @Transactional
+    public SwapRequestResponse createInstantCall(CreateInstantCallRequest request) {
+        SwapRequestState state = createPersistentState(new CreateSwapRequestRequest(
+                request.userId(),
+                request.userName(),
+                request.phoneNumber(),
+                request.applianceType()
+        ));
+        store.put(state.getId(), state);
+
+        state.requestInstantCall(
+                request.address(),
+                request.detailAddress(),
+                request.pickupLat(),
+                request.pickupLng(),
+                request.pickupAccuracyMeters(),
+                request.pickupSource()
+        );
+        PickupRequestEntity pickupRequest = persistPickupRequest(
+                state.getId(),
+                "INSTANT_CALL",
+                "REQUESTED",
+                null,
+                null,
+                request.address(),
+                request.detailAddress(),
+                request.pickupLat(),
+                request.pickupLng()
+        );
+        state.restorePickup(
+                pickupRequest.getId(),
+                pickupRequest.getPickupType(),
+                pickupRequest.getStatus(),
+                pickupRequest.getCrewId(),
+                pickupRequest.getCrewName(),
+                pickupRequest.getBookingDate(),
+                pickupRequest.getBookingTime(),
+                toLocalDateTime(pickupRequest.getCreatedAt()),
+                pickupRequest.getAddress(),
+                pickupRequest.getDetailAddress(),
+                pickupRequest.getPickupLat(),
+                pickupRequest.getPickupLng()
+        );
+        enrichGpsContext(state);
+        return state.toResponse();
     }
 
     @Transactional
@@ -207,7 +262,9 @@ public class SwapRequestService {
                 request.address(),
                 request.detailAddress(),
                 request.pickupLat(),
-                request.pickupLng()
+                request.pickupLng(),
+                request.pickupAccuracyMeters(),
+                request.pickupSource()
         );
         PickupRequestEntity pickupRequest = persistPickupRequest(
                 id,
@@ -241,7 +298,14 @@ public class SwapRequestService {
     @Transactional
     public SwapRequestResponse requestInstantCall(long id, InstantCallRequest request) {
         SwapRequestState state = findState(id);
-        state.requestInstantCall(request.address(), request.detailAddress(), request.pickupLat(), request.pickupLng());
+        state.requestInstantCall(
+                request.address(),
+                request.detailAddress(),
+                request.pickupLat(),
+                request.pickupLng(),
+                request.pickupAccuracyMeters(),
+                request.pickupSource()
+        );
         PickupRequestEntity pickupRequest = persistPickupRequest(
                 id,
                 "INSTANT_CALL",
@@ -269,6 +333,24 @@ public class SwapRequestService {
         );
         enrichGpsContext(state);
         return state.toResponse();
+    }
+
+    @Transactional
+    public SwapRequestResponse cancel(long id) {
+        SwapRequestEntity swapRequest = findSwapRequestEntity(id);
+        SwapRequestState state = findState(id);
+
+        pickupRequestRepository.findFirstBySwapRequest_IdOrderByCreatedAtDesc(id)
+                .ifPresent(pickupRequest -> {
+                    pickupRequest.changeStatus("CANCELLED");
+                    pickupRequestRepository.save(pickupRequest);
+                    restorePickup(state, pickupRequest);
+        });
+
+        swapRequest.cancel();
+        swapRequestRepository.save(swapRequest);
+        state.cancelRequest();
+        return buildResponse(state);
     }
 
     public SwapRequestResponse completeMockFinalValuation(long id) {
@@ -432,7 +514,10 @@ public class SwapRequestService {
                 request.lat(),
                 request.lng(),
                 request.heading() == null ? 0.0 : request.heading(),
-                request.speed() == null ? 0.0 : request.speed()
+                request.speed() == null ? 0.0 : request.speed(),
+                request.accuracyMeters(),
+                request.source(),
+                parseCollectedAt(request.collectedAt())
         );
 
         Long crewId = state.getCrewId() == null ? DEMO_CREW_ID : state.getCrewId();
@@ -451,7 +536,9 @@ public class SwapRequestService {
                 request.lat(),
                 request.lng(),
                 request.heading() == null ? 0.0 : request.heading(),
-                request.speed() == null ? 0.0 : request.speed()
+                request.speed() == null ? 0.0 : request.speed(),
+                request.accuracyMeters(),
+                request.source()
         );
         return buildResponse(state);
     }
@@ -656,17 +743,18 @@ public class SwapRequestService {
             return null;
         }
 
-        CachedRoute cachedRoute = pickupRequestId < 0 ? null : routeCacheStore.get(pickupRequestId);
-        if (cachedRoute != null && sameRouteDestination(cachedRoute.destination(), destination)) {
-            return cachedRoute.route();
-        }
-
         SwapRequestResponse.DriverLocation driverLocation = response.tracking().driverLocation();
         if (driverLocation == null) {
             return null;
         }
 
         SwapRequestResponse.RoutePoint origin = new SwapRequestResponse.RoutePoint(driverLocation.lat(), driverLocation.lng());
+
+        CachedRoute cachedRoute = pickupRequestId < 0 ? null : routeCacheStore.get(pickupRequestId);
+        if (cachedRoute != null && reusableCachedRoute(cachedRoute, origin, destination, "DRIVE")) {
+            return cachedRoute.route();
+        }
+
         SwapRequestResponse.RouteSummary computedRoute = kakaoDirectionsService.computeDrivingRoute(origin, destination);
         if (computedRoute == null) {
             return null;
@@ -680,19 +768,35 @@ public class SwapRequestService {
                 computedRoute.durationLabel(),
                 computedRoute.encodedPolyline(),
                 computedRoute.points() == null ? List.of() : computedRoute.points(),
-                computedRoute.calculatedAt()
+                computedRoute.calculatedAt(),
+                computedRoute.routeSource(),
+                computedRoute.approximate(),
+                computedRoute.suppressedByProximity()
         );
 
         if (pickupRequestId >= 0) {
-            routeCacheStore.put(pickupRequestId, new CachedRoute(destination, route));
+            routeCacheStore.put(pickupRequestId, new CachedRoute(origin, destination, "DRIVE", LocalDateTime.now(), route));
         }
 
         return route;
     }
 
-    private boolean sameRouteDestination(SwapRequestResponse.RoutePoint left, SwapRequestResponse.RoutePoint right) {
-        return Math.abs(left.lat() - right.lat()) < 0.000001
-                && Math.abs(left.lng() - right.lng()) < 0.000001;
+    private boolean reusableCachedRoute(
+            CachedRoute cachedRoute,
+            SwapRequestResponse.RoutePoint origin,
+            SwapRequestResponse.RoutePoint destination,
+            String mode
+    ) {
+        return mode.equals(cachedRoute.mode())
+                && cachedRoute.createdAt().isAfter(LocalDateTime.now().minusSeconds(ROUTE_CACHE_TTL_SECONDS))
+                && distanceMeters(cachedRoute.origin().lat(), cachedRoute.origin().lng(), origin.lat(), origin.lng())
+                < ROUTE_CACHE_ORIGIN_MOVE_LIMIT_METERS
+                && distanceMeters(
+                cachedRoute.destination().lat(),
+                cachedRoute.destination().lng(),
+                destination.lat(),
+                destination.lng()
+        ) < ROUTE_CACHE_DESTINATION_MOVE_LIMIT_METERS;
     }
 
     private SwapRequestResponse.RoutePoint resolveDestination(SwapRequestResponse response) {
@@ -724,6 +828,18 @@ public class SwapRequestService {
     }
 
     private void appendLocationHistory(long pickupRequestId, double lat, double lng, double heading, double speed) {
+        appendLocationHistory(pickupRequestId, lat, lng, heading, speed, null, null);
+    }
+
+    private void appendLocationHistory(
+            long pickupRequestId,
+            double lat,
+            double lng,
+            double heading,
+            double speed,
+            Double accuracyMeters,
+            String source
+    ) {
         List<SwapRequestResponse.LocationHistoryPoint> history = locationHistoryStore.computeIfAbsent(
                 pickupRequestId,
                 ignored -> new CopyOnWriteArrayList<>()
@@ -741,7 +857,9 @@ public class SwapRequestService {
                 lng,
                 heading,
                 speed,
-                LocalDateTime.now()
+                LocalDateTime.now(),
+                accuracyMeters,
+                source
         ));
     }
 
@@ -996,6 +1114,10 @@ public class SwapRequestService {
         pickupRequestRepository.findFirstBySwapRequest_IdOrderByCreatedAtDesc(swapRequest.getId())
                 .ifPresent(pickupRequest -> restorePickup(state, pickupRequest));
 
+        if (SwapRequestStatus.CANCELLED.name().equals(swapRequest.getStatus())) {
+            state.cancelRequest();
+        }
+
         store.put(state.getId(), state);
         return state;
     }
@@ -1072,16 +1194,57 @@ public class SwapRequestService {
         return Math.round(earthRadius * c * 10.0) / 10.0;
     }
 
+    private String formatDistance(Double distanceMeters) {
+        if (distanceMeters == null) {
+            return null;
+        }
+        if (distanceMeters >= 1000) {
+            return String.format(java.util.Locale.US, "%.1f km", distanceMeters / 1000.0);
+        }
+        return Math.round(distanceMeters) + " m";
+    }
+
+    private String formatDuration(Long durationSeconds) {
+        if (durationSeconds == null) {
+            return null;
+        }
+        long minutes = Math.max(1L, Math.round(durationSeconds / 60.0));
+        return minutes + " min";
+    }
+
+    private LocalDateTime parseCollectedAt(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+
+        try {
+            return OffsetDateTime.parse(value).atZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
+        } catch (DateTimeParseException ignored) {
+            try {
+                return LocalDateTime.parse(value);
+            } catch (DateTimeParseException ignoredAgain) {
+                return null;
+            }
+        }
+    }
+
     private static String valueOrDefault(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value;
     }
 
     private void resetCrewGpsStore() {
         crewGpsStore.clear();
+        crewGpsStore.put(
+                DEMO_CREW_ID,
+                new CrewGpsState(DEMO_CREW_ID, DEMO_CREW_NAME, 37.55884, 126.92705, "AVAILABLE")
+        );
     }
 
     private record CachedRoute(
+            SwapRequestResponse.RoutePoint origin,
             SwapRequestResponse.RoutePoint destination,
+            String mode,
+            LocalDateTime createdAt,
             SwapRequestResponse.RouteSummary route
     ) {
     }

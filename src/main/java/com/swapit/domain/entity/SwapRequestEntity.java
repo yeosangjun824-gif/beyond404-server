@@ -63,6 +63,13 @@ public class SwapRequestEntity {
         this.status = status;
         this.updatedAt = OffsetDateTime.now();
     }
+
+    public void cancel() {
+        this.status = "CANCELLED";
+        this.cancelledAt = OffsetDateTime.now();
+        this.updatedAt = this.cancelledAt;
+    }
+
     public Long getId() {
         return id;
     }

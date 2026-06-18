@@ -6,6 +6,9 @@ public record CrewLocationRequest(
         @NotNull Double lat,
         @NotNull Double lng,
         Double heading,
-        Double speed
+        Double speed,
+        Double accuracyMeters,
+        String collectedAt,
+        String source
 ) {
 }

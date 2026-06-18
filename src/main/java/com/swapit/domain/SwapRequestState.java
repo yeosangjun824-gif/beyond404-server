@@ -58,6 +58,8 @@ public class SwapRequestState {
     private String detailAddress;
     private Double pickupLat;
     private Double pickupLng;
+    private Double pickupAccuracyMeters;
+    private String pickupSource;
     private final List<SwapRequestResponse.NearbyCrew> nearbyCrews = new ArrayList<>();
 
     private String crewPhotoUrl;
@@ -267,6 +269,21 @@ public class SwapRequestState {
         addNotification("수거 예약 완료", scheduledLabel() + " 기준으로 수거 예약이 접수되었습니다.");
     }
 
+    public void confirmBooking(
+            LocalDate bookingDate,
+            String bookingTime,
+            String address,
+            String detailAddress,
+            Double pickupLat,
+            Double pickupLng,
+            Double pickupAccuracyMeters,
+            String pickupSource
+    ) {
+        confirmBooking(bookingDate, bookingTime, address, detailAddress, pickupLat, pickupLng);
+        this.pickupAccuracyMeters = positiveOrNull(pickupAccuracyMeters);
+        this.pickupSource = valueOrDefault(pickupSource, "unknown");
+    }
+
     public void requestInstantCall(String address, String detailAddress, Double pickupLat, Double pickupLng) {
         this.pickupRequestId = ensurePickupRequestId();
         this.pickupType = "INSTANT_CALL";
@@ -281,6 +298,28 @@ public class SwapRequestState {
         this.trackingMessage = "바로콜 요청이 접수되었습니다. 근처 수거 크루를 찾는 중입니다.";
         addTrackingEvent("INSTANT_CALL_REQUESTED", "바로콜 요청 접수");
         addNotification("바로콜 요청", "근처 수거 크루를 찾고 있습니다.");
+    }
+
+    public void requestInstantCall(
+            String address,
+            String detailAddress,
+            Double pickupLat,
+            Double pickupLng,
+            Double pickupAccuracyMeters,
+            String pickupSource
+    ) {
+        requestInstantCall(address, detailAddress, pickupLat, pickupLng);
+        this.pickupAccuracyMeters = positiveOrNull(pickupAccuracyMeters);
+        this.pickupSource = valueOrDefault(pickupSource, "unknown");
+    }
+
+    public void cancelRequest() {
+        this.pickupStatus = "CANCELLED";
+        this.status = SwapRequestStatus.CANCELLED;
+        this.trackingPhase = "CANCELLED";
+        this.trackingMessage = "예약이 취소되었습니다.";
+        addTrackingEvent("CANCELLED", "예약 취소");
+        addNotification("예약 취소", "수거 요청이 취소되었습니다.");
     }
 
     public void restorePickup(
@@ -374,7 +413,28 @@ public class SwapRequestState {
     }
 
     public void updateCrewLocation(double lat, double lng, double heading, double speed) {
-        this.driverLocation = new SwapRequestResponse.DriverLocation(lat, lng, heading, speed, LocalDateTime.now());
+        updateCrewLocation(lat, lng, heading, speed, null, null, null);
+    }
+
+    public void updateCrewLocation(
+            double lat,
+            double lng,
+            double heading,
+            double speed,
+            Double accuracyMeters,
+            String source,
+            LocalDateTime collectedAt
+    ) {
+        this.driverLocation = new SwapRequestResponse.DriverLocation(
+                lat,
+                lng,
+                heading,
+                speed,
+                LocalDateTime.now(),
+                positiveOrNull(accuracyMeters),
+                source,
+                collectedAt
+        );
 
         if ("ARRIVED".equals(pickupStatus)) {
             this.trackingPhase = "EN_ROUTE_TO_PROCESSING_CENTER";
@@ -549,7 +609,16 @@ public class SwapRequestState {
     public SwapRequestResponse toResponse() {
         SwapRequestResponse.Booking booking = bookingDate == null && address == null && pickupLat == null && pickupLng == null
                 ? null
-                : new SwapRequestResponse.Booking(bookingDate, bookingTime, address, detailAddress, pickupLat, pickupLng);
+                : new SwapRequestResponse.Booking(
+                bookingDate,
+                bookingTime,
+                address,
+                detailAddress,
+                pickupLat,
+                pickupLng,
+                pickupAccuracyMeters,
+                pickupSource
+        );
         SwapRequestResponse.PickupRequest pickupRequest = pickupRequestId == null
                 ? null
                 : new SwapRequestResponse.PickupRequest(
@@ -576,7 +645,13 @@ public class SwapRequestState {
         SwapRequestResponse.TrackingMetrics trackingMetrics = new SwapRequestResponse.TrackingMetrics(
                 calculateCrewToPickupDistanceMeters(),
                 calculateCrewToProcessingCenterDistanceMeters(),
-                isDriverLocationLive()
+                isDriverLocationLive(),
+                driverLocation == null ? null : driverLocation.accuracyMeters(),
+                pickupAccuracyMeters,
+                null,
+                null,
+                null,
+                isDriverLocationLive() ? "HIGH" : "LOW"
         );
         SwapRequestResponse.DispatchInfo dispatchInfo = pickupRequestId == null
                 ? null
@@ -875,6 +950,10 @@ public class SwapRequestState {
 
     private static String valueOrDefault(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value;
+    }
+
+    private static Double positiveOrNull(Double value) {
+        return value == null || value <= 0 ? null : value;
     }
 
     private static String mockModelName(String applianceType) {

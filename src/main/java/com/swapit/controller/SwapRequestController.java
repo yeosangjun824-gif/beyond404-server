@@ -3,6 +3,7 @@ package com.swapit.controller;
 import com.swapit.dto.BookingRequest;
 import com.swapit.dto.BookingAvailabilityResponse;
 import com.swapit.dto.CrewReviewRequest;
+import com.swapit.dto.CreateInstantCallRequest;
 import com.swapit.dto.CreateSwapRequestRequest;
 import com.swapit.dto.InstantCallRequest;
 import com.swapit.dto.PhotoUploadRequest;
@@ -34,6 +35,11 @@ public class SwapRequestController {
     @PostMapping
     public SwapRequestResponse create(@Valid @RequestBody CreateSwapRequestRequest request) {
         return swapRequestService.create(request);
+    }
+
+    @PostMapping("/instant-call")
+    public SwapRequestResponse createInstantCall(@Valid @RequestBody CreateInstantCallRequest request) {
+        return swapRequestService.createInstantCall(request);
     }
 
     @GetMapping("/latest")
@@ -91,6 +97,11 @@ public class SwapRequestController {
             @Valid @RequestBody InstantCallRequest request
     ) {
         return swapRequestService.requestInstantCall(id, request);
+    }
+
+    @PostMapping("/{id}/cancel")
+    public SwapRequestResponse cancel(@PathVariable long id) {
+        return swapRequestService.cancel(id);
     }
 
     @GetMapping("/{id}/tracking")

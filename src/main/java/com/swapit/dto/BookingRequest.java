@@ -11,6 +11,8 @@ public record BookingRequest(
         @NotBlank String address,
         String detailAddress,
         Double pickupLat,
-        Double pickupLng
+        Double pickupLng,
+        Double pickupAccuracyMeters,
+        String pickupSource
 ) {
 }

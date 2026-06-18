@@ -26,6 +26,9 @@ management:
     db:
       enabled: true
 
+server:
+  port: ${SERVER_PORT:8082}
+
 kakao:
   mobility:
     rest-api-key: ${KAKAO_REST_API_KEY:}

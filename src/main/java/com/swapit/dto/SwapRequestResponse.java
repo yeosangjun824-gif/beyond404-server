@@ -95,7 +95,9 @@ public record SwapRequestResponse(
             String address,
             String detailAddress,
             Double pickupLat,
-            Double pickupLng
+            Double pickupLng,
+            Double pickupAccuracyMeters,
+            String pickupSource
     ) {
     }
 
@@ -164,7 +166,10 @@ public record SwapRequestResponse(
             double lng,
             double heading,
             double speed,
-            LocalDateTime updatedAt
+            LocalDateTime updatedAt,
+            Double accuracyMeters,
+            String source,
+            LocalDateTime collectedAt
     ) {
     }
 
@@ -189,7 +194,13 @@ public record SwapRequestResponse(
     public record TrackingMetrics(
             Double crewToPickupMeters,
             Double crewToProcessingCenterMeters,
-            boolean locationLive
+            boolean locationLive,
+            Double driverAccuracyMeters,
+            Double pickupAccuracyMeters,
+            String proximityStatus,
+            Double effectiveDistanceMeters,
+            Long effectiveDurationSeconds,
+            String distanceConfidence
     ) {
     }
 
@@ -201,7 +212,10 @@ public record SwapRequestResponse(
             String durationLabel,
             String encodedPolyline,
             List<RoutePoint> points,
-            LocalDateTime calculatedAt
+            LocalDateTime calculatedAt,
+            String routeSource,
+            boolean approximate,
+            boolean suppressedByProximity
     ) {
     }
 
@@ -216,7 +230,9 @@ public record SwapRequestResponse(
             double lng,
             double heading,
             double speed,
-            LocalDateTime recordedAt
+            LocalDateTime recordedAt,
+            Double accuracyMeters,
+            String source
     ) {
     }
 
