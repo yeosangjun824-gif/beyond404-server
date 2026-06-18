@@ -55,14 +55,12 @@ import java.util.stream.Collectors;
 public class SwapRequestService {
     private static final long DEMO_CUSTOMER_ID = 1L;
     private static final long DEMO_CREW_ID = 101L;
-    private static final double MAX_CREW_LOCATION_ACCURACY_METERS = 100.0;
-    private static final long MAX_CREW_LOCATION_AGE_MILLIS = 60_000L;
-    private static final String DEMO_CREW_NAME = "誘쇱? ?щ（";
-    private static final String DEMO_CREW_PHOTO = "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=400&q=80";
+    private static final String DEMO_CREW_NAME = "무함마드";
+    private static final String DEMO_CREW_PHOTO = "/crew-muhammad.png";
     private static final double DEMO_CREW_RATING = 4.9;
     private static final List<String> DEMO_CREW_REVIEW_SUMMARY = List.of(
-            "移쒖젅?섍쾶 ?섍굅 吏꾪뻾",
-            "?쒓컙 ?쎌냽????吏耳쒖슂"
+            "깔끔하고 신속하게 수거를 진행해요",
+            "약속 시간을 잘 지키고 안내가 친절해요"
     );
 
     private final UserRepository userRepository;
@@ -101,6 +99,24 @@ public class SwapRequestService {
         SwapRequestState state = createPersistentState(request);
         store.put(state.getId(), state);
         return buildResponse(state);
+    }
+
+    @Transactional
+    public SwapRequestResponse createInstantCall(com.swapit.dto.CreateInstantCallRequest request) {
+        SwapRequestResponse created = create(new CreateSwapRequestRequest(
+                request.userId(),
+                request.userName(),
+                request.phoneNumber(),
+                request.applianceType()
+        ));
+        return requestInstantCall(created.id(), new InstantCallRequest(
+                request.address(),
+                request.detailAddress(),
+                request.pickupLat(),
+                request.pickupLng(),
+                request.pickupAccuracyMeters(),
+                request.pickupSource()
+        ));
     }
 
     @Transactional
@@ -329,6 +345,13 @@ public class SwapRequestService {
         return buildResponse(state);
     }
 
+    @Transactional
+    public SwapRequestResponse cancel(long id) {
+        SwapRequestEntity swapRequest = findSwapRequestEntity(id);
+        swapRequest.cancel();
+        return buildResponse(findState(id));
+    }
+
     @Transactional(readOnly = true)
     public Optional<SwapRequestResponse> getLatestByUser(long userId) {
         return swapRequestRepository.findFirstByUser_IdOrderByCreatedAtDesc(userId)
@@ -397,12 +420,8 @@ public class SwapRequestService {
         return List.copyOf(locationHistoryStore.getOrDefault(pickupRequestId, List.of()));
     }
 
-    public SwapRequestResponse acceptCall(long pickupRequestId) {
-        return acceptCall(pickupRequestId, null);
-    }
-
     @Transactional
-    public SwapRequestResponse acceptCall(long pickupRequestId, CrewLocationRequest initialLocation) {
+    public SwapRequestResponse acceptCall(long pickupRequestId) {
         SwapRequestState state = findByPickupRequestId(pickupRequestId);
         CrewGpsState assignedCrew = crewGpsStore.get(DEMO_CREW_ID);
         String crewName = assignedCrew == null ? DEMO_CREW_NAME : assignedCrew.crewName;
@@ -412,19 +431,9 @@ public class SwapRequestService {
         pickupRequestRepository.save(pickupRequest);
         restorePickup(state, pickupRequest);
 
-        CrewLocationProcessor.ProcessedLocation processedInitialLocation = crewLocationProcessor.process(
-                pickupRequestId,
-                DEMO_CREW_ID,
-                initialLocation,
-                cachedRoutePoints(pickupRequestId)
-        );
-        if (processedInitialLocation.accepted()) {
-            CrewGpsState crewState = upsertCrewGpsState(DEMO_CREW_ID, crewName, processedInitialLocation);
-            state.updateCrewLocation(crewState.lat, crewState.lng, crewState.heading, crewState.speed, crewState.accuracy);
-            appendLocationHistory(pickupRequestId, crewState.lat, crewState.lng, crewState.heading, crewState.speed);
-        } else if (isLiveCrewState(assignedCrew)) {
+        if (assignedCrew != null) {
             assignedCrew.status = "ASSIGNED";
-            state.updateCrewLocation(assignedCrew.lat, assignedCrew.lng, assignedCrew.heading, assignedCrew.speed, assignedCrew.accuracy);
+            state.updateCrewLocation(assignedCrew.lat, assignedCrew.lng, assignedCrew.heading, assignedCrew.speed);
             appendLocationHistory(pickupRequestId, assignedCrew.lat, assignedCrew.lng, assignedCrew.heading, assignedCrew.speed);
         }
 
@@ -455,17 +464,22 @@ public class SwapRequestService {
             return buildResponse(state);
         }
 
-        CrewGpsState crewState = upsertCrewGpsState(
-                state.getCrewId() == null ? DEMO_CREW_ID : state.getCrewId(),
-                DEMO_CREW_NAME,
-                processedLocation
+        Long crewId = state.getCrewId() == null ? DEMO_CREW_ID : state.getCrewId();
+        CrewGpsState crewState = crewGpsStore.computeIfAbsent(
+                crewId,
+                id -> new CrewGpsState(id, DEMO_CREW_NAME, processedLocation.lat(), processedLocation.lng(), "ASSIGNED")
         );
+        crewState.lat = processedLocation.lat();
+        crewState.lng = processedLocation.lng();
+        crewState.heading = processedLocation.heading();
+        crewState.speed = processedLocation.speed();
+        crewState.status = "ASSIGNED";
         state.updateCrewLocation(
-                crewState.lat,
-                crewState.lng,
-                crewState.heading,
-                crewState.speed,
-                crewState.accuracy
+                processedLocation.lat(),
+                processedLocation.lng(),
+                processedLocation.heading(),
+                processedLocation.speed(),
+                processedLocation.accuracy()
         );
 
         appendLocationHistory(
@@ -715,6 +729,14 @@ public class SwapRequestService {
     private boolean sameRouteDestination(SwapRequestResponse.RoutePoint left, SwapRequestResponse.RoutePoint right) {
         return Math.abs(left.lat() - right.lat()) < 0.000001
                 && Math.abs(left.lng() - right.lng()) < 0.000001;
+    }
+
+    private List<SwapRequestResponse.RoutePoint> cachedRoutePoints(long pickupRequestId) {
+        CachedRoute cachedRoute = routeCacheStore.get(pickupRequestId);
+        if (cachedRoute == null || cachedRoute.route() == null || cachedRoute.route().points() == null) {
+            return List.of();
+        }
+        return cachedRoute.route().points();
     }
 
     private SwapRequestResponse.RoutePoint resolveDestination(SwapRequestResponse response) {
@@ -1098,80 +1120,6 @@ public class SwapRequestService {
         return value == null || value.isBlank() ? fallback : value;
     }
 
-    private List<SwapRequestResponse.RoutePoint> cachedRoutePoints(long pickupRequestId) {
-        CachedRoute cachedRoute = routeCacheStore.get(pickupRequestId);
-        if (cachedRoute == null || cachedRoute.route() == null || cachedRoute.route().points() == null) {
-            return List.of();
-        }
-
-        return cachedRoute.route().points();
-    }
-
-    private CrewGpsState upsertCrewGpsState(Long crewId, String crewName, CrewLocationRequest request) {
-        CrewGpsState crewState = crewGpsStore.computeIfAbsent(
-                crewId,
-                id -> new CrewGpsState(id, crewName, request.lat(), request.lng(), "ASSIGNED")
-        );
-        crewState.lat = request.lat();
-        crewState.lng = request.lng();
-        crewState.heading = request.heading() == null ? 0.0 : request.heading();
-        crewState.speed = request.speed() == null ? 0.0 : request.speed();
-        crewState.accuracy = request.accuracy();
-        crewState.status = "ASSIGNED";
-        crewState.updatedAt = LocalDateTime.now();
-        return crewState;
-    }
-
-    private CrewGpsState upsertCrewGpsState(
-            Long crewId,
-            String crewName,
-            CrewLocationProcessor.ProcessedLocation location
-    ) {
-        CrewGpsState crewState = crewGpsStore.computeIfAbsent(
-                crewId,
-                id -> new CrewGpsState(id, crewName, location.lat(), location.lng(), "ASSIGNED")
-        );
-        crewState.lat = location.lat();
-        crewState.lng = location.lng();
-        crewState.heading = location.heading();
-        crewState.speed = location.speed();
-        crewState.accuracy = location.accuracy();
-        crewState.status = "ASSIGNED";
-        crewState.updatedAt = LocalDateTime.now();
-        return crewState;
-    }
-
-    private boolean isUsableCrewLocation(CrewLocationRequest request) {
-        if (request == null || request.lat() == null || request.lng() == null) {
-            return false;
-        }
-
-        double lat = request.lat();
-        double lng = request.lng();
-        if (Double.isNaN(lat) || Double.isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-            return false;
-        }
-
-        Double accuracy = request.accuracy();
-        if (accuracy != null && (accuracy < 0 || accuracy > MAX_CREW_LOCATION_ACCURACY_METERS)) {
-            return false;
-        }
-
-        Long capturedAt = request.capturedAt();
-        if (capturedAt != null) {
-            long ageMillis = Math.abs(System.currentTimeMillis() - capturedAt);
-            return ageMillis <= MAX_CREW_LOCATION_AGE_MILLIS;
-        }
-
-        return true;
-    }
-
-    private boolean isLiveCrewState(CrewGpsState crewState) {
-        return crewState != null
-                && crewState.updatedAt != null
-                && crewState.updatedAt.isAfter(LocalDateTime.now().minusSeconds(60));
-    }
-
     private void resetCrewGpsStore() {
         crewGpsStore.clear();
     }
@@ -1189,9 +1137,7 @@ public class SwapRequestService {
         private double lng;
         private double heading;
         private double speed;
-        private Double accuracy;
         private String status;
-        private LocalDateTime updatedAt;
 
         private CrewGpsState(Long crewId, String crewName, double lat, double lng, String status) {
             this.crewId = crewId;
@@ -1201,7 +1147,6 @@ public class SwapRequestService {
             this.status = status;
             this.heading = 0.0;
             this.speed = 0.0;
-            this.updatedAt = LocalDateTime.now();
         }
     }
 

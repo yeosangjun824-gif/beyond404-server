@@ -92,10 +92,7 @@ public class KakaoDirectionsService {
                     formatDuration(durationSeconds),
                     null,
                     points,
-                    LocalDateTime.now(),
-                    "kakao_drive",
-                    false,
-                    false
+                    LocalDateTime.now()
             );
         } catch (IOException | InterruptedException | IllegalArgumentException error) {
             if (error instanceof InterruptedException) {
