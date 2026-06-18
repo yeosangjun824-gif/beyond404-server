@@ -73,6 +73,7 @@ public class SwapRequestService {
     private final Map<Long, SwapRequestState> store = new ConcurrentHashMap<>();
     private final Map<Long, CrewGpsState> crewGpsStore = new ConcurrentHashMap<>();
     private final Map<Long, List<SwapRequestResponse.LocationHistoryPoint>> locationHistoryStore = new ConcurrentHashMap<>();
+    private final Map<Long, CachedRoute> routeCacheStore = new ConcurrentHashMap<>();
     private final List<SwapRequestResponse.LocationPoint> processingCenters = List.of(
             new SwapRequestResponse.LocationPoint("?쒖슱 ?쒕? e-waste ?덈툕", 37.5481, 126.8914),
             new SwapRequestResponse.LocationPoint("?쒖슱 ?숇? e-waste ?덈툕", 37.5457, 127.1427)
@@ -491,6 +492,7 @@ public class SwapRequestService {
         sequence.set(1);
         resetCrewGpsStore();
         locationHistoryStore.clear();
+        routeCacheStore.clear();
         return Map.of(
                 "message", "Demo pickup state has been reset.",
                 "totalSwapRequests", store.size(),
@@ -513,7 +515,7 @@ public class SwapRequestService {
                 ? List.of()
                 : List.copyOf(locationHistoryStore.getOrDefault(pickupRequestId, List.of()));
 
-        SwapRequestResponse.RouteSummary route = resolveRoute(response, history);
+        SwapRequestResponse.RouteSummary route = resolveRoute(pickupRequestId, response, history);
         SwapRequestResponse.Tracking tracking = new SwapRequestResponse.Tracking(
                 response.tracking().message(),
                 response.tracking().estimatedArrivalAt(),
@@ -554,11 +556,22 @@ public class SwapRequestService {
     }
 
     private SwapRequestResponse.RouteSummary resolveRoute(
+            long pickupRequestId,
             SwapRequestResponse response,
             List<SwapRequestResponse.LocationHistoryPoint> history
     ) {
         if (response.tracking() == null) {
             return null;
+        }
+
+        SwapRequestResponse.RoutePoint destination = resolveDestination(response);
+        if (destination == null) {
+            return null;
+        }
+
+        CachedRoute cachedRoute = pickupRequestId < 0 ? null : routeCacheStore.get(pickupRequestId);
+        if (cachedRoute != null && sameRouteDestination(cachedRoute.destination(), destination)) {
+            return cachedRoute.route();
         }
 
         SwapRequestResponse.DriverLocation driverLocation = response.tracking().driverLocation();
@@ -567,17 +580,12 @@ public class SwapRequestService {
         }
 
         SwapRequestResponse.RoutePoint origin = new SwapRequestResponse.RoutePoint(driverLocation.lat(), driverLocation.lng());
-        SwapRequestResponse.RoutePoint destination = resolveDestination(response);
-        if (destination == null) {
-            return null;
-        }
-
         SwapRequestResponse.RouteSummary computedRoute = kakaoDirectionsService.computeDrivingRoute(origin, destination);
         if (computedRoute == null) {
             return null;
         }
 
-        return new SwapRequestResponse.RouteSummary(
+        SwapRequestResponse.RouteSummary route = new SwapRequestResponse.RouteSummary(
                 computedRoute.mode(),
                 computedRoute.distanceMeters(),
                 computedRoute.durationSeconds(),
@@ -587,6 +595,17 @@ public class SwapRequestService {
                 computedRoute.points() == null ? List.of() : computedRoute.points(),
                 computedRoute.calculatedAt()
         );
+
+        if (pickupRequestId >= 0) {
+            routeCacheStore.put(pickupRequestId, new CachedRoute(destination, route));
+        }
+
+        return route;
+    }
+
+    private boolean sameRouteDestination(SwapRequestResponse.RoutePoint left, SwapRequestResponse.RoutePoint right) {
+        return Math.abs(left.lat() - right.lat()) < 0.000001
+                && Math.abs(left.lng() - right.lng()) < 0.000001;
     }
 
     private SwapRequestResponse.RoutePoint resolveDestination(SwapRequestResponse response) {
@@ -972,6 +991,12 @@ public class SwapRequestService {
 
     private void resetCrewGpsStore() {
         crewGpsStore.clear();
+    }
+
+    private record CachedRoute(
+            SwapRequestResponse.RoutePoint destination,
+            SwapRequestResponse.RouteSummary route
+    ) {
     }
 
     private static final class CrewGpsState {
