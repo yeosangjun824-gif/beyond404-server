@@ -7,8 +7,7 @@ public record CrewLocationRequest(
         @NotNull Double lng,
         Double heading,
         Double speed,
-        Double accuracyMeters,
-        String collectedAt,
-        String source
+        Double accuracy,
+        Long capturedAt
 ) {
 }

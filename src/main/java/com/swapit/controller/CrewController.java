@@ -63,8 +63,11 @@ public class CrewController {
     }
 
     @PostMapping("/calls/{pickupRequestId}/accept")
-    public SwapRequestResponse acceptCall(@PathVariable long pickupRequestId) {
-        return swapRequestService.acceptCall(pickupRequestId);
+    public SwapRequestResponse acceptCall(
+            @PathVariable long pickupRequestId,
+            @Valid @RequestBody(required = false) CrewLocationRequest request
+    ) {
+        return swapRequestService.acceptCall(pickupRequestId, request);
     }
 
     @PostMapping("/pickups/{pickupRequestId}/depart")
