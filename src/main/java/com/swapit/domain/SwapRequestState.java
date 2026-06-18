@@ -563,11 +563,15 @@ public class SwapRequestState {
                 pickupRequestedAt,
                 List.copyOf(nearbyCrews)
         );
+        String normalizedCrewPhotoUrl = crewId != null && crewId == 101L
+                ? "/crew-muhammad.png"
+                : (crewPhotoUrl == null ? "/crew-muhammad.png" : crewPhotoUrl);
+
         SwapRequestResponse.CrewProfile crewProfile = crewName == null
                 ? null
                 : new SwapRequestResponse.CrewProfile(
                 crewName,
-                crewPhotoUrl == null ? "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&q=80" : crewPhotoUrl,
+                normalizedCrewPhotoUrl,
                 crewRating == 0.0 ? 4.8 : crewRating,
                 crewReviewSummary.isEmpty()
                         ? List.of("친절하게 수거를 진행해요.", "시간 약속을 잘 지켜요.")
