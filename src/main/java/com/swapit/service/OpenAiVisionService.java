@@ -116,7 +116,10 @@ public class OpenAiVisionService {
 
         Map<String, Object> imageUrlContent = new LinkedHashMap<>();
         imageUrlContent.put("type", "image_url");
-        imageUrlContent.put("image_url", Map.of("url", imageUrl));
+        imageUrlContent.put("image_url", Map.of(
+                "url", imageUrl,
+                "detail", "high"
+        ));
 
         Map<String, Object> message = new LinkedHashMap<>();
         message.put("role", "user");

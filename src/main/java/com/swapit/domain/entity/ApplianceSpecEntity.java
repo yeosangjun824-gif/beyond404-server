@@ -44,6 +44,8 @@ public class ApplianceSpecEntity {
 
     protected ApplianceSpecEntity() {}
 
+    public String getBrand() { return brand; }
+    public String getModelName() { return modelName; }
     public String getSizeGrade() { return sizeGrade; }
     public BigDecimal getCapacityL() { return capacityL; }
     public BigDecimal getCapacityKg() { return capacityKg; }

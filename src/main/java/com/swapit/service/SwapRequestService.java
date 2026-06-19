@@ -43,6 +43,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
@@ -135,9 +136,14 @@ public class SwapRequestService {
         String applianceType = preferKnown(labelResult.applianceType(), requestedApplianceType);
         String brand = preferKnown(labelResult.brand(), request.brand());
         String modelName = preferKnown(labelResult.modelName(), request.modelName());
+        ApplianceSpecDetails applianceSpecDetails = resolveApplianceSpecDetails(modelName);
+        if (applianceSpecDetails.hasSpec()) {
+            applianceType = preferKnown(applianceSpecDetails.applianceType(), applianceType);
+            brand = preferKnown(applianceSpecDetails.brand(), brand);
+            modelName = displayModelName(modelName, applianceSpecDetails.modelName());
+        }
         String estimatedAge = preferKnown(conditionResult.estimatedAge(), request.estimatedAge());
         String exteriorCondition = preferKnown(conditionResult.exteriorCondition(), request.exteriorCondition());
-        ApplianceSizeDetails applianceSizeDetails = resolveApplianceSizeDetails(modelName);
 
         state.applyPhotoInspection(
                 request.fileName(),
@@ -151,8 +157,8 @@ public class SwapRequestService {
                 applianceType,
                 brand,
                 modelName,
-                applianceSizeDetails.sizeGrade(),
-                applianceSizeDetails.sizeMetric()
+                applianceSpecDetails.sizeGrade(),
+                applianceSpecDetails.sizeMetric()
         );
         persistVisionInspection(id, request, applianceType, brand, modelName, estimatedAge, exteriorCondition, exteriorImageUrl);
         return buildResponse(state);
@@ -954,13 +960,51 @@ public class SwapRequestService {
     }
 
     private ApplianceSizeDetails resolveApplianceSizeDetails(String modelName) {
+        ApplianceSpecDetails details = resolveApplianceSpecDetails(modelName);
+        return new ApplianceSizeDetails(details.sizeGrade(), details.sizeMetric());
+    }
+
+    private ApplianceSpecDetails resolveApplianceSpecDetails(String modelName) {
         if (modelName == null || modelName.isBlank()) {
-            return new ApplianceSizeDetails(null, null);
+            return ApplianceSpecDetails.empty();
         }
 
         return applianceSpecsRepository.findByModelNameIgnoreCase(modelName)
-                .map(spec -> new ApplianceSizeDetails(spec.getSizeGrade(), spec.buildSizeMetric()))
-                .orElseGet(() -> new ApplianceSizeDetails(null, null));
+                .or(() -> findSpecByNormalizedModelName(modelName))
+                .map(spec -> new ApplianceSpecDetails(
+                        spec.getBrand(),
+                        spec.getApplianceType(),
+                        spec.getModelName(),
+                        spec.getSizeGrade(),
+                        spec.buildSizeMetric()
+                ))
+                .orElseGet(ApplianceSpecDetails::empty);
+    }
+
+    private Optional<ApplianceSpecEntity> findSpecByNormalizedModelName(String modelName) {
+        String normalized = normalizeModelKey(modelName);
+        if (normalized.isBlank()) {
+            return Optional.empty();
+        }
+
+        return applianceSpecsRepository.findAll().stream()
+                .filter(spec -> normalizeModelKey(spec.getModelName()).equals(normalized))
+                .findFirst();
+    }
+
+    private static String normalizeModelKey(String modelName) {
+        if (modelName == null) {
+            return "";
+        }
+        return modelName.replaceAll("[^A-Za-z0-9]", "").toUpperCase(Locale.ROOT);
+    }
+
+    private static String displayModelName(String candidate, String dbModelName) {
+        String value = isKnown(candidate) ? candidate : dbModelName;
+        if (!isKnown(value)) {
+            return value;
+        }
+        return value.trim().toUpperCase(Locale.ROOT);
     }
 
     private void persistApplianceConfirmation(long id, UpdateApplianceRequest request) {
@@ -1197,6 +1241,22 @@ public class SwapRequestService {
             String sizeGrade,
             String sizeMetric
     ) {
+    }
+
+    private record ApplianceSpecDetails(
+            String brand,
+            String applianceType,
+            String modelName,
+            String sizeGrade,
+            String sizeMetric
+    ) {
+        private static ApplianceSpecDetails empty() {
+            return new ApplianceSpecDetails(null, null, null, null, null);
+        }
+
+        private boolean hasSpec() {
+            return isKnown(modelName);
+        }
     }
 
     private static final class CrewGpsState {
