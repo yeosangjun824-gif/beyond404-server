@@ -34,6 +34,7 @@ import com.swapit.repository.ValuationRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -49,6 +50,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
+
+import static org.springframework.http.HttpStatus.CONFLICT;
 
 @Service
 @RequiredArgsConstructor
@@ -325,10 +328,12 @@ public class SwapRequestService {
         }
 
         String normalizedComment = request.comment() == null ? null : request.comment().trim();
-        CrewReviewEntity review = crewReviewRepository.findBySwapRequest_Id(id)
-                .orElseGet(() -> CrewReviewEntity.create(swapRequest, crewId, request.rating(), normalizedComment));
+        CrewReviewEntity existingReview = crewReviewRepository.findBySwapRequest_Id(id).orElse(null);
+        if (existingReview != null) {
+            throw new ResponseStatusException(CONFLICT, "Crew review has already been submitted.");
+        }
 
-        review.updateReview(crewId, request.rating(), normalizedComment);
+        CrewReviewEntity review = CrewReviewEntity.create(swapRequest, crewId, request.rating(), normalizedComment);
         crewReviewRepository.save(review);
 
         return buildResponse(state);
