@@ -441,7 +441,7 @@ public class SwapRequestState {
         this.pickupStatus = "COMPLETED";
         this.status = SwapRequestStatus.DELIVERED_TO_EWASTE_HUB;
         this.trackingPhase = "DELIVERED_TO_EWASTE_HUB";
-        this.trackingMessage = "e-waste 공장에 전달 완료되었습니다.";
+        this.trackingMessage = "e-waste 허브 전달이 완료되었습니다.";
         this.estimatedArrivalAt = LocalDateTime.now();
         this.finalCreditValue = this.estimatedFinalCredit;
         this.finalValuationStatus = "READY";

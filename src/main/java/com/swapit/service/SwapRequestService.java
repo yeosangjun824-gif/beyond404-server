@@ -600,10 +600,10 @@ public class SwapRequestService {
         state.completeFinalValuation(
                 request.amount(),
                 List.of(
-                        valueOrDefault(request.exteriorReason(), "?멸? ?곹깭瑜??뺤씤?덉뒿?덈떎."),
-                        valueOrDefault(request.partsReason(), "?ъ궗??遺??媛?μ꽦???뺤씤?덉뒿?덈떎."),
-                        valueOrDefault(request.materialReason(), "?뚯옱 ?뚯닔 媛移섎? 諛섏쁺?덉뒿?덈떎."),
-                        valueOrDefault(request.processingReason(), "?섍굅 諛?泥섎━ 鍮꾩슜??諛섏쁺?덉뒿?덈떎.")
+                        valueOrDefault(request.exteriorReason(), "전면 사용 흔적은 있으나 주요 파손은 확인되지 않았습니다."),
+                        valueOrDefault(request.partsReason(), "일부 내부 부품은 재사용 가능성이 있어 보상가에 반영했습니다."),
+                        valueOrDefault(request.materialReason(), "금속/플라스틱 회수 가능 가치를 기준으로 기본 금액을 산정했습니다."),
+                        valueOrDefault(request.processingReason(), "수거, 분류, 안전 해체 비용을 차감해 최종 금액을 확정했습니다.")
                 )
         );
         return buildResponse(state);
