@@ -396,8 +396,18 @@ public class SwapRequestService {
     @Transactional
     public SwapRequestResponse cancel(long id) {
         SwapRequestEntity swapRequest = findSwapRequestEntity(id);
+        Optional<PickupRequestEntity> pickupRequest = pickupRequestRepository.findFirstBySwapRequest_IdOrderByCreatedAtDesc(id);
+        pickupRequest.ifPresent(request -> {
+            if (!"REQUESTED".equals(request.getStatus()) && !"CONFIRMED".equals(request.getStatus())) {
+                throw new ResponseStatusException(CONFLICT, "Assigned pickup requests cannot be cancelled.");
+            }
+            request.updateStatus("CANCELLED");
+            pickupRequestRepository.save(request);
+        });
         swapRequest.cancel();
-        return buildResponse(findState(id));
+        SwapRequestState state = findState(id);
+        pickupRequest.ifPresent(request -> restorePickup(state, request));
+        return buildResponse(state);
     }
 
     @Transactional(readOnly = true)
